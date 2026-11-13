@@ -538,7 +538,61 @@
     filter: drop-shadow(0 0 12px rgba(255, 30, 45, 0.8));
   }
 
-  /* Top Match Telemetry Bar */
+  /* Top Match Telemetry Bar & Tactical Compass */
+  #hud-compass {
+    position: absolute;
+    top: 66px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 340px;
+    height: 22px;
+    background: rgba(8, 12, 18, 0.68);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  .compass-center-tick {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 2px;
+    height: 6px;
+    background: var(--accent);
+    transform: translateX(-50%);
+  }
+  .compass-blip {
+    position: absolute;
+    top: 3px;
+    transform: translateX(-50%);
+    color: #ff4d58;
+    font-weight: 700;
+    font-size: 0.66rem;
+    white-space: nowrap;
+    text-shadow: 0 0 6px rgba(255, 45, 58, 0.9);
+  }
+
+  #click-lock-prompt {
+    position: absolute;
+    top: 36%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10, 15, 22, 0.88);
+    border: 1px solid var(--accent);
+    box-shadow: 0 0 28px rgba(232, 155, 60, 0.35);
+    padding: 10px 22px;
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 0.92rem;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    display: none;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #click-lock-prompt.active { display: block; }
+
   .hud-top {
     position: absolute;
     top: 16px;
@@ -1074,6 +1128,7 @@
   <div class="hud-topleft">
     <div class="telemetry-pill">
       <span>ROOM: <strong id="hud-room-code">SOLO</strong></span>
+      <span>ONLINE: <strong id="hud-online">1</strong></span>
       <span>PING: <strong id="hud-ping">0 ms</strong></span>
       <span>FPS: <strong id="hud-fps">60</strong></span>
     </div>
@@ -1090,6 +1145,14 @@
     </div>
     <div class="score-box score-foe" id="hud-score-foe">0</div>
   </div>
+
+  <!-- Tactical Enemy Bearing Compass -->
+  <div id="hud-compass">
+    <div class="compass-center-tick"></div>
+    <div id="compass-blips"></div>
+  </div>
+
+  <div id="click-lock-prompt">CLICK CHUỘT ĐỂ KHÓA TÂM BẮN // CLICK TO ENGAGE</div>
 
   <div id="killfeed"></div>
 
@@ -1252,7 +1315,8 @@ const PEER_ICE_CONFIG = {
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' }
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' }
     ],
     iceCandidatePoolSize: 4
   }
@@ -2519,8 +2583,8 @@ class ArenaWorld {
     this.beacons = [];
     this.rainPoints = null;
     this.spawnPoints = [
-      { x: 0.0,   y: 0.0, z: -15.4, yaw: Math.PI },
-      { x: 0.0,   y: 0.0, z:  15.4, yaw: 0.0 },
+      { x: -4.2,  y: 0.0, z: -14.8, yaw: Math.PI * 1.05 },
+      { x:  4.2,  y: 0.0, z:  14.8, yaw: Math.PI * 0.05 },
       { x: -13.5, y: 0.0, z: -14.2, yaw: Math.PI * 0.88 },
       { x:  13.5, y: 0.0, z:  14.2, yaw: -Math.PI * 0.12 },
       { x:  14.2, y: 0.0, z: -13.8, yaw: Math.PI * 1.12 },
@@ -3499,7 +3563,7 @@ class ViewmodelRig {
 
     // Tactical Laser Beam & World Dot (placed in worldScene later)
     this.laserDot = new THREE.Mesh(
-      new THREE.SphereGeometry(0.018, 8, 8),
+      new THREE.SphereGeometry(0.008, 8, 8),
       new THREE.MeshBasicMaterial({ color: 0x38ff7a })
     );
     this.laserDot.visible = false;
@@ -3774,8 +3838,8 @@ class RemoteOperator {
     this.scene = scene;
     this.isBot = isBot;
 
-    this.pos = new THREE.Vector3(0, 0, 0);
-    this.netPos = new THREE.Vector3(0, 0, 0);
+    this.pos = new THREE.Vector3(0, 0, 15.4);
+    this.netPos = new THREE.Vector3(0, 0, 15.4);
     this.netVel = new THREE.Vector3(0, 0, 0);
     this.yaw = 0;
     this.netYaw = 0;
@@ -3908,6 +3972,7 @@ class RemoteOperator {
 
     this.nameplate = makeNameplateSprite(this.name);
     this.root.add(this.nameplate);
+    this.root.position.copy(this.pos);
 
     this.scene.add(this.root);
   }
@@ -4755,6 +4820,10 @@ class IronveilEngine {
     this.roomCode = '';
     this.hostConn = null;          // Client -> Host connection
     this.clientConns = new Map();  // Host -> Map<peerId, DataConnection>
+    this.hostInMatch = false;
+    this.hadPointerLock = false;
+    this._helloRetryTimer = null;
+    this._lastNetTick = performance.now();
     this.netSyncAccum = 0;
     this.pingAccum = 0;
 
@@ -4792,15 +4861,21 @@ class IronveilEngine {
 
     this.applyQualityPreset('ultra');
     this.bindEvents();
-    this.checkUrlRoomParam();
 
     setProgress(100, 'SYSTEMS ONLINE // READY FOR DEPLOYMENT');
     await new Promise(r => setTimeout(r, 220));
     document.getElementById('boot-screen').classList.add('hidden');
     document.getElementById('lobby-screen').classList.remove('hidden');
 
+    // Background-tab-safe 30Hz P2P heartbeat (runs even in Lobby or when Alt-Tabbed to Zalo/Discord!)
+    this._lastNetTick = performance.now();
+    setInterval(() => this.networkHeartbeat(), 33);
+
     this.lastTime = performance.now();
     requestAnimationFrame(t => this.loop(t));
+
+    // Auto-join friend's room if opened via ?room=XXXX invite link
+    this.checkUrlRoomParam();
   }
 
   setupPostProcessing() {
@@ -4873,8 +4948,12 @@ class IronveilEngine {
     const params = new URLSearchParams(window.location.search);
     const r = params.get('room');
     if (r) {
-      document.getElementById('room-input').value = r.trim().toUpperCase().slice(0, 10);
-      showToast(`INVITE CODE DETECTED: ${r.toUpperCase()} — CLICK JOIN ROOM`);
+      const clean = r.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      if (clean) {
+        document.getElementById('room-input').value = clean;
+        showToast(`INVITE LINK DETECTED — AUTO-JOINING ROOM [${clean}]...`);
+        this.joinRoom(clean);
+      }
     }
   }
 
@@ -4887,19 +4966,32 @@ class IronveilEngine {
     return s;
   }
 
-  cleanupPeer() {
+  cleanupPeer(clearUrl = false) {
+    if (this._helloRetryTimer) {
+      clearInterval(this._helloRetryTimer);
+      this._helloRetryTimer = null;
+    }
     for (const op of this.remotes.values()) op.dispose();
     this.remotes.clear();
     this.botBrain = null;
     this.botEnabled = false;
     this.clientConns.clear();
     this.hostConn = null;
+    this.hostInMatch = false;
     if (this.peer) {
       try { this.peer.destroy(); } catch (_) {}
       this.peer = null;
     }
     this.roomCode = '';
     document.getElementById('room-lobby-box').classList.remove('active');
+    const btnDeploy = document.getElementById('btn-deploy');
+    btnDeploy.className = 'btn btn-primary';
+    btnDeploy.textContent = 'DEPLOY TO ARENA';
+    if (clearUrl) {
+      try {
+        if (window.location.search) history.replaceState(null, '', window.location.pathname);
+      } catch (_) {}
+    }
     this.setNetBadge('ok', 'STUN: GOOGLE PUBLIC CLUSTER READY');
   }
 
@@ -4912,15 +5004,15 @@ class IronveilEngine {
   hostRoom() {
     this.audio.init();
     this.saveCallsign();
-    this.cleanupPeer();
+    this.cleanupPeer(false);
 
-    let desired = document.getElementById('room-input').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const autoGenerated = !desired;
-    if (!desired) desired = this.generateRoomCode();
+    // Always allocate a fresh 4-char Room ID so leftover invite codes never collide
+    const desired = this.generateRoomCode();
 
     this.isHost = true;
     this.myId = 'host';
     this.gameMode = document.getElementById('mode-select').value;
+    this.spawnLocalAt(this.arena.spawnPoints[0]);
     this.setNetBadge('warn', `ALLOCATING ROOM ${desired} ON PEERJS + GOOGLE STUN...`);
 
     if (typeof window.Peer === 'undefined') {
@@ -4938,9 +5030,10 @@ class IronveilEngine {
       document.getElementById('active-room-code').textContent = desired;
       document.getElementById('room-role-label').textContent = `ACTIVE ROOM // HOST (${this.gameMode.toUpperCase()})`;
       document.getElementById('room-lobby-box').classList.add('active');
+      try { history.replaceState(null, '', `?room=${desired}`); } catch (_) {}
       this.setNetBadge('ok', `HOSTING ROOM [${desired}] VIA GOOGLE STUN`);
       this.refreshLobbyRoster();
-      showToast(`ROOM ${desired} CREATED — SHARE CODE WITH FRIENDS!`);
+      showToast(`ROOM ${desired} CREATED — SHARE LINK OR ID WITH FRIENDS!`);
     });
 
     peer.on('connection', (conn) => {
@@ -4951,18 +5044,9 @@ class IronveilEngine {
       const pid = 'p_' + Math.random().toString(36).slice(2, 7);
       conn._playerId = pid;
 
-      conn.on('open', () => {
-        this.clientConns.set(pid, conn);
-        // Auto-remove warmup AI bot when a real friend joins 1v1 Duel!
-        if (this.botEnabled && this.gameMode === 'duel') {
-          this.setBotActive(false);
-        }
-        const op = new RemoteOperator(pid, 'OPERATOR', this.worldScene, this.mats, false);
-        const sp = this.pickBestSpawnPoint(pid);
-        op.pos.set(sp.x, sp.y, sp.z);
-        op.netPos.copy(op.pos);
-        this.remotes.set(pid, op);
-
+      let registered = false;
+      const sendWelcomePacket = (sp) => {
+        if (!conn.open) return;
         conn.send({
           t: 'welcome',
           yourId: pid,
@@ -4973,21 +5057,54 @@ class IronveilEngine {
           roster: this.serializeRoster()
         });
         this.broadcastFromHost({ t: 'roster', roster: this.serializeRoster() });
+      };
+
+      const ensureClientRegistered = (initialName = 'OPERATOR') => {
+        if (registered) return this.remotes.get(pid);
+        registered = true;
+        this.clientConns.set(pid, conn);
+        if (this.botEnabled && this.gameMode === 'duel') {
+          this.setBotActive(false);
+        }
+        const op = new RemoteOperator(pid, (initialName || 'OPERATOR').slice(0, 14), this.worldScene, this.mats, false);
+        const sp = this.pickBestSpawnPoint(pid);
+        op._assignedSpawn = sp;
+        op.pos.set(sp.x, sp.y, sp.z);
+        op.netPos.copy(op.pos);
+        op.yaw = sp.yaw ?? 0;
+        op.netYaw = op.yaw;
+        op.root.position.copy(op.pos);
+        op.root.rotation.y = op.yaw;
+        this.remotes.set(pid, op);
+
+        if (conn.open) sendWelcomePacket(sp);
+        else conn.on('open', () => sendWelcomePacket(sp));
+
         this.refreshLobbyRoster();
-        showToast('FRIEND CONNECTED TO ROOM!');
+        this.audio.playFoley('ads');
+        showToast('FRIEND JOINED ROOM — CLICK START MATCH TO DEPLOY TOGETHER!');
         if (this.inMatch && this.gameMode === 'duel') {
           this.startNewDuelRound(true);
         }
-      });
+        return op;
+      };
 
-      conn.on('data', (msg) => this.onHostReceiveData(pid, conn, msg));
+      conn.on('open', () => ensureClientRegistered());
+      if (conn.open) ensureClientRegistered();
+
+      conn.on('data', (msg) => {
+        const op = ensureClientRegistered(msg && msg.name ? msg.name : 'OPERATOR');
+        if (msg && msg.t === 'hello' && msg.needWelcome && op) {
+          sendWelcomePacket(op._assignedSpawn || this.arena.spawnPoints[1]);
+        }
+        this.onHostReceiveData(pid, conn, msg);
+      });
       conn.on('close', () => this.onPeerDisconnected(pid));
       conn.on('error', () => this.onPeerDisconnected(pid));
     });
 
     peer.on('error', (err) => {
-      if (err.type === 'unavailable-id' && autoGenerated) {
-        document.getElementById('room-input').value = '';
+      if (err.type === 'unavailable-id') {
         this.hostRoom();
         return;
       }
@@ -4996,19 +5113,27 @@ class IronveilEngine {
     });
   }
 
-  joinRoom() {
+  joinRoom(overrideCode = null) {
     this.audio.init();
     this.saveCallsign();
-    const code = document.getElementById('room-input').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const rawCode = typeof overrideCode === 'string' ? overrideCode : document.getElementById('room-input').value;
+    const code = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!code) {
       showToast('ENTER YOUR FRIEND\'S ROOM ID FIRST');
       document.getElementById('room-input').focus();
       return;
     }
 
-    this.cleanupPeer();
+    this.cleanupPeer(false);
+    document.getElementById('room-input').value = code;
     this.isHost = false;
     this.setNetBadge('warn', `CONNECTING TO ROOM [${code}] VIA GOOGLE STUN...`);
+
+    if (typeof window.Peer === 'undefined') {
+      this.setNetBadge('err', 'PEERJS CDN BLOCKED — CHECK INTERNET CONNECTION');
+      showToast('ERROR: PeerJS library not loaded');
+      return;
+    }
 
     const peer = new window.Peer(undefined, PEER_ICE_CONFIG);
     this.peer = peer;
@@ -5016,10 +5141,14 @@ class IronveilEngine {
     let connected = false;
     const joinTimeout = setTimeout(() => {
       if (!connected) {
+        if (this._helloRetryTimer) {
+          clearInterval(this._helloRetryTimer);
+          this._helloRetryTimer = null;
+        }
         this.setNetBadge('err', `TIMEOUT REACHING ROOM [${code}]`);
-        showToast('CONNECTION TIMED OUT — CHECK ROOM ID');
+        showToast('CONNECTION TIMED OUT — CHECK ROOM ID OR RETRY');
       }
-    }, 12000);
+    }, 14000);
 
     peer.on('open', () => {
       const conn = peer.connect(PEER_PREFIX + code.toLowerCase(), {
@@ -5028,27 +5157,51 @@ class IronveilEngine {
       });
       this.hostConn = conn;
 
-      conn.on('open', () => {
-        conn.send({ t: 'hello', name: this.myName });
-      });
+      const sendHello = () => {
+        if (conn.open) {
+          conn.send({ t: 'hello', name: this.myName, needWelcome: !connected });
+        }
+      };
+
+      conn.on('open', sendHello);
+      if (conn.open) sendHello();
+      this._helloRetryTimer = setInterval(() => {
+        if (!connected) sendHello();
+        else {
+          clearInterval(this._helloRetryTimer);
+          this._helloRetryTimer = null;
+        }
+      }, 500);
 
       conn.on('data', (msg) => {
+        if (!msg) return;
         if (msg.t === 'welcome') {
+          const firstWelcome = !connected;
           connected = true;
           clearTimeout(joinTimeout);
+          if (this._helloRetryTimer) {
+            clearInterval(this._helloRetryTimer);
+            this._helloRetryTimer = null;
+          }
           this.myId = msg.yourId;
           this.roomCode = code;
           this.gameMode = msg.mode;
+          this.hostInMatch = !!msg.inMatch;
           document.getElementById('active-room-code').textContent = code;
           document.getElementById('room-role-label').textContent = `CONNECTED // CLIENT (${this.gameMode.toUpperCase()})`;
           document.getElementById('room-lobby-box').classList.add('active');
+          try { history.replaceState(null, '', `?room=${code}`); } catch (_) {}
           this.setNetBadge('ok', `LINKED TO ROOM [${code}]`);
           this.syncRosterList(msg.roster);
-          this.spawnLocalAt(msg.spawn);
-          conn.send({ t: 'hello', name: this.myName });
-          showToast(`CONNECTED TO ${msg.hostName}'S ROOM!`);
-          if (msg.inMatch) {
-            this.enterArena();
+          if (firstWelcome && msg.spawn) {
+            this.spawnLocalAt(msg.spawn);
+          }
+          conn.send({ t: 'hello', name: this.myName, needWelcome: false });
+          if (firstWelcome) {
+            showToast(`JOINED ${msg.hostName}'S ROOM — WAITING FOR HOST TO START!`);
+          }
+          if (msg.inMatch && !this.inMatch) {
+            this.enterArena(true);
           }
           return;
         }
@@ -5057,6 +5210,10 @@ class IronveilEngine {
 
       conn.on('close', () => {
         clearTimeout(joinTimeout);
+        if (this._helloRetryTimer) {
+          clearInterval(this._helloRetryTimer);
+          this._helloRetryTimer = null;
+        }
         showToast('HOST CLOSED THE ROOM');
         this.returnToLobby(true);
       });
@@ -5064,8 +5221,12 @@ class IronveilEngine {
 
     peer.on('error', (err) => {
       clearTimeout(joinTimeout);
+      if (this._helloRetryTimer) {
+        clearInterval(this._helloRetryTimer);
+        this._helloRetryTimer = null;
+      }
       this.setNetBadge('err', `JOIN FAILED: ${err.type}`);
-      showToast(err.type === 'peer-unavailable' ? `ROOM [${code}] NOT FOUND` : `NETWORK ERROR: ${err.type}`);
+      showToast(err.type === 'peer-unavailable' ? `ROOM [${code}] NOT FOUND OR CLOSED` : `NETWORK ERROR: ${err.type}`);
     });
   }
 
@@ -5092,12 +5253,14 @@ class IronveilEngine {
   serializeRoster() {
     const list = [{
       id: 'host', name: this.myName,
-      kills: this.kills, deaths: this.deaths, headshots: this.headshots, ping: 0
+      kills: this.kills, deaths: this.deaths, headshots: this.headshots, ping: 0,
+      x: +this.pos.x.toFixed(2), y: +this.pos.y.toFixed(2), z: +this.pos.z.toFixed(2), yaw: +this.yaw.toFixed(3)
     }];
     for (const [id, op] of this.remotes.entries()) {
       list.push({
         id, name: op.name,
-        kills: op.kills, deaths: op.deaths, headshots: op.headshots, ping: op.ping
+        kills: op.kills, deaths: op.deaths, headshots: op.headshots, ping: op.ping,
+        x: +op.netPos.x.toFixed(2), y: +op.netPos.y.toFixed(2), z: +op.netPos.z.toFixed(2), yaw: +op.netYaw.toFixed(3)
       });
     }
     return list;
@@ -5116,6 +5279,14 @@ class IronveilEngine {
       let op = this.remotes.get(item.id);
       if (!op) {
         op = new RemoteOperator(item.id, item.name, this.worldScene, this.mats, item.id === 'bot');
+        if (typeof item.x === 'number') {
+          op.pos.set(item.x, item.y, item.z);
+          op.netPos.copy(op.pos);
+          op.yaw = item.yaw || 0;
+          op.netYaw = op.yaw;
+          op.root.position.copy(op.pos);
+          op.root.rotation.y = op.yaw;
+        }
         this.remotes.set(item.id, op);
       } else {
         op.setName(item.name);
@@ -5144,12 +5315,32 @@ class IronveilEngine {
     ul.innerHTML = roster.map(r => `
       <li>
         <span style="color:${r.id === this.myId ? 'var(--cyan)' : '#fff'}">${r.name} ${r.id === 'host' ? '[HOST]' : ''}</span>
-        <span style="color:var(--text-muted)">${r.id === 'host' ? '0 ms' : (r.ping || 0) + ' ms'}</span>
+        <span style="color:var(--text-muted)">${r.id === 'host' ? 'HOST' : (r.ping || 0) + ' ms'}</span>
       </li>
     `).join('');
+
+    const btnDeploy = document.getElementById('btn-deploy');
+    if (!this.roomCode) {
+      btnDeploy.className = 'btn btn-primary';
+      btnDeploy.textContent = 'DEPLOY TO ARENA';
+    } else if (this.isHost) {
+      btnDeploy.className = 'btn btn-primary';
+      btnDeploy.textContent = this.clientConns.size > 0
+        ? `START MATCH — DEPLOY ALL (${this.clientConns.size + 1} PLAYERS)`
+        : 'DEPLOY SOLO WARMUP (FRIENDS AUTO-JOIN)';
+    } else {
+      if (this.hostInMatch) {
+        btnDeploy.className = 'btn btn-primary';
+        btnDeploy.textContent = 'JOIN LIVE MATCH NOW';
+      } else {
+        btnDeploy.className = 'btn btn-cyan';
+        btnDeploy.textContent = 'READY — WAITING FOR HOST TO START';
+      }
+    }
   }
 
   onHostReceiveData(pid, conn, msg) {
+    if (!msg) return;
     const op = this.remotes.get(pid);
     if (!op) return;
 
@@ -5157,6 +5348,9 @@ class IronveilEngine {
       op.setName((msg.name || 'OPERATOR').slice(0, 14));
       this.broadcastFromHost({ t: 'roster', roster: this.serializeRoster() });
       this.refreshLobbyRoster();
+    } else if (msg.t === 'ready_ping') {
+      this.audio.playFoley('boltSlap');
+      showToast(`${op.name} IS READY — CLICK START MATCH!`);
     } else if (msg.t === 'st') {
       const d = msg.d;
       op.netPos.set(d[0], d[1], d[2]);
@@ -5177,18 +5371,37 @@ class IronveilEngine {
     } else if (msg.t === 'hit') {
       this.hostProcessDamage(pid, msg.targetId, msg.dmg, msg.head, WEAPON_SPECS[msg.w]?.slotLabel || 'MCX', msg.dir);
     } else if (msg.t === 'ping') {
-      if ( msg.lastRtt ) op.ping = Math.round(msg.lastRtt);
+      if (msg.lastRtt) op.ping = Math.round(msg.lastRtt);
       conn.send({ t: 'pong', cTime: msg.cTime });
     }
   }
 
   onClientReceiveData(msg) {
+    if (!msg) return;
     if (msg.t === 'roster') {
       this.syncRosterList(msg.roster);
-    } else if (msg.t === 'deploy') {
+    } else if (msg.t === 'mode') {
       this.gameMode = msg.mode;
-      if (!this.inMatch) this.enterArena();
+      document.getElementById('room-role-label').textContent = `CONNECTED // CLIENT (${this.gameMode.toUpperCase()})`;
+      showToast(`MODE CHANGED: ${this.gameMode === 'duel' ? '1v1 DUEL' : 'FREE-FOR-ALL'}`);
+    } else if (msg.t === 'deploy') {
+      this.gameMode = msg.mode || this.gameMode;
+      this.hostInMatch = true;
+      if (msg.spawns && msg.spawns[this.myId]) {
+        this.spawnLocalAt(msg.spawns[this.myId]);
+      }
+      this.enterArena(true);
     } else if (msg.t === 'world') {
+      const wasHostInMatch = this.hostInMatch;
+      this.hostInMatch = msg.im === 1;
+      if (msg.mode) this.gameMode = msg.mode;
+      if (wasHostInMatch !== this.hostInMatch && !this.inMatch) {
+        this.refreshLobbyRoster();
+      }
+      // Guarantee Client automatically deploys into the exact same Arena whenever Host is in match!
+      if (this.hostInMatch && !this.inMatch) {
+        this.enterArena(true);
+      }
       this.matchClock = msg.clock;
       this.roundFreezeTimer = msg.freeze || 0;
       this.duelRounds = msg.duel || this.duelRounds;
@@ -5202,6 +5415,9 @@ class IronveilEngine {
         let op = this.remotes.get(id);
         if (!op) {
           op = new RemoteOperator(id, id === 'host' ? 'HOST' : 'OPERATOR', this.worldScene, this.mats, id === 'bot');
+          op.pos.set(p[1], p[2], p[3]);
+          op.netPos.copy(op.pos);
+          op.root.position.copy(op.pos);
           this.remotes.set(id, op);
         }
         op.applySnapshot(p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[12], p[10], p[11] === 1);
@@ -5228,6 +5444,7 @@ class IronveilEngine {
         if (op) {
           op.pos.set(msg.sp.x, msg.sp.y, msg.sp.z);
           op.netPos.copy(op.pos);
+          op.root.position.copy(op.pos);
           op.alive = true;
           op.hp = 100;
         }
@@ -5504,6 +5721,7 @@ class IronveilEngine {
       );
     }
     if (ev.victimId === this.myId) {
+      this.respawnTimer = 3.0;
       document.getElementById('death-overlay').classList.add('active');
     }
   }
@@ -5721,7 +5939,22 @@ class IronveilEngine {
     }
   }
 
-  enterArena() {
+  onDeployButtonClick() {
+    this.audio.init();
+    this.saveCallsign();
+    // Prevent Client from deploying into a disconnected solo match while waiting for Host!
+    if (!this.isHost && this.roomCode && !this.hostInMatch) {
+      if (this.hostConn && this.hostConn.open) {
+        this.hostConn.send({ t: 'ready_ping', name: this.myName });
+      }
+      this.audio.playFoley('ads');
+      showToast('READY SIGNAL SENT — WAITING FOR HOST TO CLICK START MATCH!');
+      return;
+    }
+    this.enterArena(false);
+  }
+
+  enterArena(fromNetwork = false) {
     this.audio.init();
     this.saveCallsign();
     this.inMatch = true;
@@ -5731,6 +5964,10 @@ class IronveilEngine {
     this.deaths = 0;
     this.headshots = 0;
     this.matchClock = 480;
+
+    if (this.isHost && !fromNetwork) {
+      this.gameMode = document.getElementById('mode-select').value;
+    }
 
     document.getElementById('lobby-screen').classList.add('hidden');
     document.getElementById('pause-menu').classList.remove('active');
@@ -5744,29 +5981,59 @@ class IronveilEngine {
     document.getElementById('hud-mode-lbl').textContent = this.gameMode === 'duel' ? '1v1 DUEL (BO9)' : 'FFA (20 KILLS)';
 
     if (this.isHost) {
-      this.broadcastFromHost({ t: 'deploy', mode: this.gameMode });
+      const spawns = {};
+      let idx = 1;
+      for (const [id, op] of this.remotes.entries()) {
+        op.kills = 0; op.deaths = 0; op.headshots = 0;
+        const sp = this.arena.spawnPoints[idx % this.arena.spawnPoints.length];
+        idx++;
+        spawns[id] = sp;
+        if (id === 'bot' && this.botBrain) {
+          this.botBrain.spawnAt(sp);
+        } else {
+          op.pos.set(sp.x, sp.y, sp.z);
+          op.netPos.copy(op.pos);
+          op.yaw = sp.yaw ?? 0;
+          op.netYaw = op.yaw;
+          op.root.position.copy(op.pos);
+          op.root.rotation.y = op.yaw;
+          op.hp = 100;
+          op.alive = true;
+        }
+      }
+
+      this.broadcastFromHost({ t: 'deploy', mode: this.gameMode, spawns });
+      this.broadcastFromHost({ t: 'roster', roster: this.serializeRoster() });
+
       if (this.gameMode === 'duel') {
         this.startNewDuelRound(true);
       } else {
-        this.spawnLocalAt(this.pickBestSpawnPoint('host'));
+        this.spawnLocalAt(this.arena.spawnPoints[0]);
         this.showCenterBanner('OPERATION KRONOS-04', 'WEAPONS FREE // ELIMINATE ALL HOSTILES');
       }
+    } else if (fromNetwork) {
+      this.showCenterBanner(
+        this.gameMode === 'duel' ? 'ROUND 1' : 'OPERATION KRONOS-04',
+        'HOST DEPLOYED SQUAD // CLICK TO LOCK AIM'
+      );
     }
 
-    this.requestLockSafe();
+    if (!fromNetwork) {
+      this.requestLockSafe();
+    }
+    this.updateHUD();
   }
 
   returnToLobby(fromDisconnect = false) {
-    if (!fromDisconnect) this.cleanupPeer();
-    else {
-      this.cleanupPeer();
-    }
+    this.cleanupPeer(!fromDisconnect);
     this.inMatch = false;
     this.paused = false;
     this.matchEnded = false;
+    this.hadPointerLock = false;
     if (document.pointerLockElement) {
       try { document.exitPointerLock(); } catch (_) {}
     }
+    document.getElementById('click-lock-prompt').classList.remove('active');
     document.getElementById('hud').classList.remove('active');
     document.getElementById('sniper-scope-overlay').classList.remove('active');
     document.getElementById('pause-menu').classList.remove('active');
@@ -5807,16 +6074,16 @@ class IronveilEngine {
     if (!this.alive) {
       this.viewmodel.adsAlpha = 0;
       document.getElementById('sniper-scope-overlay').classList.remove('active');
-      if (this.isHost && this.gameMode === 'ffa') {
-        this.respawnTimer -= dt;
-        document.getElementById('death-sub').textContent = `RESPAWNING IN ${Math.max(0, this.respawnTimer).toFixed(1)}S...`;
-        if (this.respawnTimer <= 0 && !this.matchEnded) {
-          this.spawnLocalAt(this.pickBestSpawnPoint('host'));
+      if (this.gameMode === 'ffa') {
+        this.respawnTimer = Math.max(0, this.respawnTimer - dt);
+        document.getElementById('death-sub').textContent = `RESPAWNING IN ${this.respawnTimer.toFixed(1)}S...`;
+        if (this.isHost && this.respawnTimer <= 0 && !this.matchEnded) {
+          const sp = this.pickBestSpawnPoint('host');
+          this.spawnLocalAt(sp);
+          this.broadcastFromHost({ t: 'respawn', id: 'host', sp });
         }
       } else {
-        document.getElementById('death-sub').textContent = this.gameMode === 'duel'
-          ? 'AWAITING NEXT DUEL ROUND...'
-          : 'RESPAWNING...';
+        document.getElementById('death-sub').textContent = 'AWAITING NEXT DUEL ROUND...';
       }
       return;
     }
@@ -6009,7 +6276,7 @@ class IronveilEngine {
     if (this.wpnIdx === 0 && this.viewmodel.laserEnabled && !this.reloading && !this.sprinting) {
       const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.worldCamera.quaternion);
       const hit = this.arena.raycastWorld(this.worldCamera.position, fwd, 45);
-      if (hit) {
+      if (hit && hit.dist > 0.75) {
         this.viewmodel.laserDot.visible = true;
         this.viewmodel.laserDot.position.copy(hit.point).addScaledVector(hit.normal, 0.02);
       } else {
@@ -6036,56 +6303,74 @@ class IronveilEngine {
     this.audio.updateListener(this.worldCamera.position, fwdVec, upVec);
   }
 
-  updateNetworkTick(dt) {
-    this.netSyncAccum += dt;
-    this.pingAccum += dt;
+  // Background-safe 30Hz P2P Heartbeat: keeps Host & Clients synced even in Lobby or Alt-Tabbed!
+  networkHeartbeat() {
+    const now = performance.now();
+    const dt = Math.min((now - this._lastNetTick) / 1000, 0.25);
+    this._lastNetTick = now;
 
-    if (this.netSyncAccum >= 0.033) { // 30 Hz Real-Time Tick
-      this.netSyncAccum = 0;
-      const flags = (this.crouching ? 1 : 0) | (this.sliding ? 2 : 0);
+    // If Host tab is minimized / Alt-Tabbed while a match is running, keep authoritative timers & positions updated!
+    if (document.hidden && this.inMatch && this.isHost && !this.matchEnded) {
+      if (this.roundFreezeTimer > 0) this.roundFreezeTimer = Math.max(0, this.roundFreezeTimer - dt);
+      else this.matchClock = Math.max(0, this.matchClock - dt);
 
-      if (this.isHost && this.clientConns.size > 0) {
-        const snap = [[
-          'host',
-          +this.pos.x.toFixed(2), +this.pos.y.toFixed(2), +this.pos.z.toFixed(2),
-          +this.yaw.toFixed(3), +this.pitch.toFixed(3),
-          +this.vel.x.toFixed(2), +this.vel.y.toFixed(2), +this.vel.z.toFixed(2),
-          flags, Math.round(this.hp), this.alive ? 1 : 0, this.wpnIdx
-        ]];
-        for (const [id, op] of this.remotes.entries()) {
-          const rFlags = (op.crouching ? 1 : 0) | (op.sliding ? 2 : 0);
-          snap.push([
-            id,
-            +op.netPos.x.toFixed(2), +op.netPos.y.toFixed(2), +op.netPos.z.toFixed(2),
-            +op.netYaw.toFixed(3), +op.netPitch.toFixed(3),
-            +op.netVel.x.toFixed(2), +op.netVel.y.toFixed(2), +op.netVel.z.toFixed(2),
-            rFlags, Math.round(op.hp), op.alive ? 1 : 0, op.weaponIdx
-          ]);
+      if (!this.alive && this.gameMode === 'ffa') {
+        this.respawnTimer = Math.max(0, this.respawnTimer - dt);
+        if (this.respawnTimer <= 0) {
+          const sp = this.pickBestSpawnPoint('host');
+          this.spawnLocalAt(sp);
+          this.broadcastFromHost({ t: 'respawn', id: 'host', sp });
         }
-        this.broadcastFromHost({
-          t: 'world',
-          p: snap,
-          clock: Math.round(this.matchClock),
-          freeze: +this.roundFreezeTimer.toFixed(1),
-          duel: this.duelRounds
-        });
-      } else if (!this.isHost && this.hostConn && this.hostConn.open) {
-        this.hostConn.send({
-          t: 'st',
-          d: [
-            +this.pos.x.toFixed(2), +this.pos.y.toFixed(2), +this.pos.z.toFixed(2),
-            +this.yaw.toFixed(3), +this.pitch.toFixed(3),
-            +this.vel.x.toFixed(2), +this.vel.y.toFixed(2), +this.vel.z.toFixed(2),
-            flags, this.wpnIdx
-          ]
-        });
+      }
+      for (const op of this.remotes.values()) {
+        if (!op.isBot) op.pos.copy(op.netPos);
       }
     }
 
-    if (this.pingAccum >= 1.5) {
-      this.pingAccum = 0;
-      if (!this.isHost && this.hostConn && this.hostConn.open) {
-        this.hostConn.send({ t: 'ping', cTime: performance.now(), lastRtt: this.ping });
+    const flags = (this.crouching ? 1 : 0) | (this.sliding ? 2 : 0);
+
+    if (this.isHost && this.clientConns.size > 0) {
+      const snap = [[
+        'host',
+        +this.pos.x.toFixed(2), +this.pos.y.toFixed(2), +this.pos.z.toFixed(2),
+        +this.yaw.toFixed(3), +this.pitch.toFixed(3),
+        +this.vel.x.toFixed(2), +this.vel.y.toFixed(2), +this.vel.z.toFixed(2),
+        flags, Math.round(this.hp), this.alive ? 1 : 0, this.wpnIdx
+      ]];
+      for (const [id, op] of this.remotes.entries()) {
+        const rFlags = (op.crouching ? 1 : 0) | (op.sliding ? 2 : 0);
+        snap.push([
+          id,
+          +op.netPos.x.toFixed(2), +op.netPos.y.toFixed(2), +op.netPos.z.toFixed(2),
+          +op.netYaw.toFixed(3), +op.netPitch.toFixed(3),
+          +op.netVel.x.toFixed(2), +op.netVel.y.toFixed(2), +op.netVel.z.toFixed(2),
+          rFlags, Math.round(op.hp), op.alive ? 1 : 0, op.weaponIdx
+        ]);
+      }
+      this.broadcastFromHost({
+        t: 'world',
+        im: this.inMatch ? 1 : 0,
+        mode: this.gameMode,
+        p: snap,
+        clock: Math.round(this.matchClock),
+        freeze: +this.roundFreezeTimer.toFixed(1),
+        duel: this.duelRounds
+      });
+    } else if (!this.isHost && this.hostConn && this.hostConn.open) {
+      this.hostConn.send({
+        t: 'st',
+        d: [
+          +this.pos.x.toFixed(2), +this.pos.y.toFixed(2), +this.pos.z.toFixed(2),
+          +this.yaw.toFixed(3), +this.pitch.toFixed(3),
+          +this.vel.x.toFixed(2), +this.vel.y.toFixed(2), +this.vel.z.toFixed(2),
+          flags, this.wpnIdx
+        ]
+      });
+
+      this.pingAccum += dt;
+      if (this.pingAccum >= 1.5) {
+        this.pingAccum = 0;
+        this.hostConn.send({ t: 'ping', cTime: now, lastRtt: this.ping });
       }
     }
   }
@@ -6150,6 +6435,39 @@ class IronveilEngine {
       ? (this.remotes.size > 0 ? Math.max(...Array.from(this.remotes.values()).map(o => o.ping || 0)) : 0)
       : this.ping;
     document.getElementById('hud-ping').textContent = `${dispPing} ms`;
+    document.getElementById('hud-online').textContent = String(1 + this.remotes.size);
+
+    // Click-to-Lock Prompt when auto-deployed into Arena without pointer lock
+    document.getElementById('click-lock-prompt').classList.toggle(
+      'active',
+      this.inMatch && !this.paused && !this.matchEnded && document.pointerLockElement !== this.canvas
+    );
+
+    // Tactical Horizontal Enemy Bearing Compass (so friends always find each other immediately!)
+    const fwdX = -Math.sin(this.yaw), fwdZ = -Math.cos(this.yaw);
+    const rightX = Math.cos(this.yaw), rightZ = -Math.sin(this.yaw);
+    let blipsHtml = '';
+    for (const op of this.remotes.values()) {
+      if (!op.alive) continue;
+      const dx = op.pos.x - this.pos.x;
+      const dz = op.pos.z - this.pos.z;
+      const dist = Math.round(Math.hypot(dx, dz));
+      const relAngle = Math.atan2(dx * rightX + dz * rightZ, dx * fwdX + dz * fwdZ);
+      let pct = 50;
+      let label = `◆ ${op.name} ${dist}m`;
+      if (relAngle < -1.05) {
+        pct = 12;
+        label = `◀ ${op.name} ${dist}m`;
+      } else if (relAngle > 1.05) {
+        pct = 88;
+        label = `${op.name} ${dist}m ▶`;
+      } else {
+        pct = 50 + (relAngle / 1.05) * 38;
+      }
+      blipsHtml += `<div class="compass-blip" style="left:${pct.toFixed(1)}%">${label}</div>`;
+    }
+    const blipsEl = document.getElementById('compass-blips');
+    if (blipsEl.innerHTML !== blipsHtml) blipsEl.innerHTML = blipsHtml;
 
     // [TAB] Scoreboard Table
     if (this.keys['Tab']) {
@@ -6242,7 +6560,6 @@ class IronveilEngine {
         op.update(dt, this.audio, this.arena);
       }
       this.vfx.update(dt);
-      this.updateNetworkTick(dt);
       this.updateHUD();
 
       // Post-Processing Combat Trauma Uniforms
@@ -6252,6 +6569,9 @@ class IronveilEngine {
       this.tacPass.uniforms.uTime.value = elapsed;
       this.weaponPass.enabled = this.alive;
     } else {
+      for (const op of this.remotes.values()) {
+        op.update(dt, null, this.arena);
+      }
       // Live Cinematic Orbiting 3D Camera in Lobby Background!
       this.lobbyOrbitAngle += dt * 0.11;
       const r = 13.5;
@@ -6276,20 +6596,43 @@ class IronveilEngine {
   bindEvents() {
     window.addEventListener('resize', () => this.applyQualityPreset(this.quality));
 
-    // Lobby Buttons
+    // Lobby Buttons & Live Sync Inputs
     document.getElementById('btn-host-room').addEventListener('click', () => this.hostRoom());
     document.getElementById('btn-join-room').addEventListener('click', () => this.joinRoom());
-    document.getElementById('btn-deploy').addEventListener('click', () => this.enterArena());
-    document.getElementById('btn-leave-room').addEventListener('click', () => this.cleanupPeer());
+    document.getElementById('btn-deploy').addEventListener('click', () => this.onDeployButtonClick());
+    document.getElementById('btn-leave-room').addEventListener('click', () => this.cleanupPeer(true));
+
+    document.getElementById('callsign-input').addEventListener('input', () => {
+      this.saveCallsign();
+      if (this.roomCode) {
+        if (this.isHost) {
+          this.broadcastFromHost({ t: 'roster', roster: this.serializeRoster() });
+          this.refreshLobbyRoster();
+        } else if (this.hostConn && this.hostConn.open) {
+          this.hostConn.send({ t: 'hello', name: this.myName, needWelcome: false });
+          this.refreshLobbyRoster();
+        }
+      }
+    });
+
+    document.getElementById('mode-select').addEventListener('change', (e) => {
+      if (this.isHost) {
+        this.gameMode = e.target.value;
+        if (this.roomCode) {
+          document.getElementById('room-role-label').textContent = `ACTIVE ROOM // HOST (${this.gameMode.toUpperCase()})`;
+          this.broadcastFromHost({ t: 'mode', mode: this.gameMode });
+        }
+      }
+    });
 
     document.getElementById('btn-solo-bot').addEventListener('click', () => {
       this.audio.init();
       this.saveCallsign();
-      this.cleanupPeer();
+      this.cleanupPeer(true);
       this.isHost = true;
       this.myId = 'host';
       this.gameMode = document.getElementById('mode-select').value;
-      this.enterArena();
+      this.enterArena(false);
       this.setBotActive(true);
       showToast('DEPLOYED SOLO VS KRONOS-AI BOT');
     });
@@ -6361,22 +6704,27 @@ class IronveilEngine {
       document.getElementById('lbl-fov').textContent = this.baseFov;
     });
 
-    // Pointer Lock Change
+    // Pointer Lock Change (only trigger Pause Menu when unlocking from an active pointer lock!)
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === this.canvas;
-      if (this.inMatch && !this.matchEnded) {
-        this.paused = !locked;
-        document.getElementById('pause-menu').classList.toggle('active', !locked);
-        if (!locked) {
-          this.mouseDownL = false;
-          this.mouseDownR = false;
-          this.keys = {};
-        }
+      if (locked) {
+        this.hadPointerLock = true;
+        this.paused = false;
+        document.getElementById('pause-menu').classList.remove('active');
+        document.getElementById('click-lock-prompt').classList.remove('active');
+      } else if (this.inMatch && !this.matchEnded && this.hadPointerLock) {
+        this.hadPointerLock = false;
+        this.paused = true;
+        document.getElementById('pause-menu').classList.add('active');
+        this.mouseDownL = false;
+        this.mouseDownR = false;
+        this.keys = {};
       }
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
       if (!this.inMatch || this.paused || this.matchEnded) return;
+      this.audio.init();
       if (document.pointerLockElement !== this.canvas) {
         this.requestLockSafe();
         return;
@@ -6427,6 +6775,11 @@ class IronveilEngine {
       }
 
       this.keys[e.code] = true;
+      if (e.code === 'Escape' && this.inMatch && !this.matchEnded && document.pointerLockElement !== this.canvas) {
+        this.paused = !this.paused;
+        document.getElementById('pause-menu').classList.toggle('active', this.paused);
+        return;
+      }
       if (e.code === 'Tab' && this.inMatch) {
         e.preventDefault();
         document.getElementById('scoreboard').classList.add('active');
@@ -6464,6 +6817,7 @@ class IronveilEngine {
 }
 
 const engine = new IronveilEngine();
+window.__ironveil = engine;
 engine.boot();
 </script>
 </body>
