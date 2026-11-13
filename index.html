@@ -846,6 +846,88 @@
     color: var(--cyan);
   }
 
+  /* THIEN Divine Arsenal Skill Bar (Bottom Center) */
+  #thien-skill-bar {
+    position: absolute;
+    bottom: 24px;
+    left: 44.5%;
+    transform: translateX(-50%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    pointer-events: none;
+  }
+  .thien-bar-title {
+    font-family: var(--font-display);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: #ffd369;
+    text-shadow: 0 0 12px rgba(255, 196, 64, 0.65);
+    background: rgba(16, 12, 6, 0.86);
+    border: 1px solid rgba(255, 198, 74, 0.45);
+    padding: 2px 11px;
+  }
+  .thien-skills-row {
+    display: flex;
+    gap: 7px;
+  }
+  .skill-card {
+    min-width: 112px;
+    background: rgba(11, 14, 20, 0.86);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.25);
+    padding: 6px 9px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  }
+  .skill-card.ready {
+    border-color: rgba(255, 196, 72, 0.55);
+    border-bottom: 2px solid #ffc84a;
+    box-shadow: 0 0 16px rgba(232, 155, 60, 0.18);
+  }
+  .skill-card.active-ult {
+    background: rgba(48, 30, 6, 0.90);
+    border-color: #ffe07d;
+    border-bottom: 2px solid #ffe07d;
+    box-shadow: 0 0 24px rgba(255, 200, 74, 0.55);
+  }
+  .skill-key {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.85rem;
+    background: rgba(255, 200, 74, 0.16);
+    border: 1px solid rgba(255, 200, 74, 0.65);
+    color: #ffd875;
+    flex-shrink: 0;
+  }
+  .skill-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.18;
+  }
+  .skill-name {
+    font-family: var(--font-display);
+    font-size: 0.73rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.05em;
+  }
+  .skill-cd {
+    font-family: var(--font-mono);
+    font-size: 0.63rem;
+    color: var(--cyan);
+  }
+
   /* Respawn / Death Banner */
   #death-overlay {
     position: absolute;
@@ -944,7 +1026,7 @@
   /* Toast Notification */
   #toast {
     position: fixed;
-    bottom: 28px;
+    bottom: 108px;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
     z-index: 90;
@@ -1190,6 +1272,33 @@
     </div>
     <div class="bar-track"><div class="hp-fill" id="hud-hp-bar"></div></div>
     <div class="stamina-track"><div class="stamina-fill" id="hud-stam-bar"></div></div>
+  </div>
+
+  <div id="thien-skill-bar">
+    <div class="thien-bar-title">★ THIEN // 6-NÒNG HỘ THỂ ★</div>
+    <div class="thien-skills-row">
+      <div class="skill-card ready" id="sk-q-card">
+        <div class="skill-key">Q</div>
+        <div class="skill-info">
+          <span class="skill-name">VẠN PHÁO QUY TÔNG</span>
+          <span class="skill-cd" id="sk-q-cd">SẴN SÀNG</span>
+        </div>
+      </div>
+      <div class="skill-card ready" id="sk-e-card">
+        <div class="skill-key">E</div>
+        <div class="skill-info">
+          <span class="skill-name">TỐC BIẾN TELE</span>
+          <span class="skill-cd" id="sk-e-cd">SẴN SÀNG</span>
+        </div>
+      </div>
+      <div class="skill-card ready" id="sk-x-card">
+        <div class="skill-key">X</div>
+        <div class="skill-info">
+          <span class="skill-name">THIÊN PHẠT</span>
+          <span class="skill-cd" id="sk-x-cd">SẴN SÀNG</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="hud-bottomright">
@@ -2209,6 +2318,113 @@ class TacticalAudioEngine {
       g.gain.exponentialRampToValueAtTime(0.0005, now + 0.045);
       o.connect(g); g.connect(this.dryBus);
       o.start(now); o.stop(now + 0.05);
+    }
+  }
+
+  playSkillSFX(kind, worldPos = null) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const dest = worldPos ? this.makeSpatialTarget(worldPos, 8.0, 95.0).out : null;
+    const connectOut = (node, wetAmt = 0.65) => {
+      if (dest) {
+        node.connect(dest);
+      } else {
+        node.connect(this.dryBus);
+        if (wetAmt > 0 && this.reverbSend) {
+          const w = this.ctx.createGain();
+          w.gain.value = wetAmt * 0.45;
+          node.connect(w);
+          w.connect(this.reverbSend);
+        }
+      }
+    };
+
+    if (kind === 'blink') {
+      // Lightning Shunpo / Warp Teleport: Sub-drop + electric arc snap + harmonic shimmer
+      const sub = this.ctx.createOscillator();
+      const sg = this.ctx.createGain();
+      sub.type = 'sine';
+      sub.frequency.setValueAtTime(320, now);
+      sub.frequency.exponentialRampToValueAtTime(42, now + 0.19);
+      sg.gain.setValueAtTime(0.62, now);
+      sg.gain.exponentialRampToValueAtTime(0.001, now + 0.21);
+      sub.connect(sg);
+      connectOut(sg, 0.55);
+      sub.start(now); sub.stop(now + 0.22);
+
+      const zap = this.ctx.createOscillator();
+      const zg = this.ctx.createGain();
+      zap.type = 'sawtooth';
+      zap.frequency.setValueAtTime(520, now);
+      zap.frequency.exponentialRampToValueAtTime(2150, now + 0.12);
+      zg.gain.setValueAtTime(0.24, now);
+      zg.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      zap.connect(zg);
+      connectOut(zg, 0.85);
+      zap.start(now); zap.stop(now + 0.15);
+
+      const ns = this.ctx.createBufferSource();
+      ns.buffer = this.noiseBuf;
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2600;
+      const ng = this.ctx.createGain();
+      ng.gain.setValueAtTime(0.38, now);
+      ng.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      ns.connect(hp); hp.connect(ng);
+      connectOut(ng, 0.7);
+      ns.start(now, Math.random(), 0.16);
+    } else if (kind === 'vanphao') {
+      // Vạn Pháo Quy Tông: Resonant celestial sword-ring chord + 6-turbine spin-up!
+      for (const [idx, freq] of [660, 990, 1320, 1980].entries()) {
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        o.type = idx % 2 === 0 ? 'triangle' : 'sine';
+        o.frequency.setValueAtTime(freq * 0.96, now + idx * 0.03);
+        o.frequency.exponentialRampToValueAtTime(freq, now + idx * 0.03 + 0.09);
+        g.gain.setValueAtTime(0.18 / (1 + idx * 0.28), now + idx * 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0008, now + 0.72);
+        o.connect(g);
+        connectOut(g, 1.15);
+        o.start(now + idx * 0.03);
+        o.stop(now + 0.75);
+      }
+      const turb = this.ctx.createOscillator();
+      const tg = this.ctx.createGain();
+      turb.type = 'sawtooth';
+      turb.frequency.setValueAtTime(75, now);
+      turb.frequency.exponentialRampToValueAtTime(310, now + 0.45);
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 900;
+      tg.gain.setValueAtTime(0.28, now);
+      tg.gain.exponentialRampToValueAtTime(0.001, now + 0.52);
+      turb.connect(lp); lp.connect(tg);
+      connectOut(tg, 0.8);
+      turb.start(now); turb.stop(now + 0.54);
+    } else if (kind === 'orbital') {
+      // Thiên Phạt: Tactical lock-on double chirp + descending artillery whistle
+      for (const d of [0, 0.11]) {
+        const b = this.ctx.createOscillator();
+        const bg = this.ctx.createGain();
+        b.type = 'square';
+        b.frequency.setValueAtTime(1280, now + d);
+        bg.gain.setValueAtTime(0.16, now + d);
+        bg.gain.exponentialRampToValueAtTime(0.001, now + d + 0.07);
+        b.connect(bg);
+        connectOut(bg, 0.6);
+        b.start(now + d); b.stop(now + d + 0.08);
+      }
+      const wh = this.ctx.createOscillator();
+      const wg = this.ctx.createGain();
+      wh.type = 'sine';
+      wh.frequency.setValueAtTime(1350, now + 0.18);
+      wh.frequency.exponentialRampToValueAtTime(210, now + 0.78);
+      wg.gain.setValueAtTime(0.28, now + 0.18);
+      wg.gain.exponentialRampToValueAtTime(0.001, now + 0.80);
+      wh.connect(wg);
+      connectOut(wg, 1.1);
+      wh.start(now + 0.18); wh.stop(now + 0.82);
     }
   }
 
@@ -4035,9 +4251,151 @@ function makeNameplateSprite(name) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sp.scale.set(1.05, 0.26, 1);
-  sp.position.set(0, 2.04, 0);
+  sp.scale.set(boss ? 1.25 : 1.05, boss ? 0.31 : 0.26, 1);
+  sp.position.set(0, boss ? 2.62 : 2.04, 0);
   return sp;
+}
+
+// Shared 6-Minigun Celestial Halo Formation ("Vạn Pháo Quy Tông" — 1st & 3rd Person!)
+function createHaloMinigunFormation(mats) {
+  const root = new THREE.Group();
+  root.visible = false;
+
+  const goldHaloMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(1.85, 1.25, 0.34),
+    transparent: true,
+    opacity: 0.86,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const cyanCoreMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(1.2, 3.2, 4.2),
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  const flashMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(4.5, 2.8, 0.9),
+    transparent: true,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+
+  // Mystic Golden Tactical Halo Rings
+  const ringGroup = new THREE.Group();
+  const outerTorus = new THREE.Mesh(new THREE.TorusGeometry(1.42, 0.016, 8, 48), goldHaloMat);
+  const innerOct = new THREE.Mesh(new THREE.RingGeometry(1.02, 1.07, 8), goldHaloMat);
+  ringGroup.add(outerTorus, innerOct);
+  root.add(ringGroup);
+
+  // Shared Geometries for 6 Autonomous Floating 6-Barrel M134 Miniguns (oriented along +Z for native lookAt!)
+  const drumGeo = new THREE.CylinderGeometry(0.068, 0.068, 0.23, 10);
+  drumGeo.rotateX(Math.PI / 2);
+  const collarGeo = new THREE.CylinderGeometry(0.078, 0.078, 0.05, 12);
+  collarGeo.rotateX(Math.PI / 2);
+  const brlGeo = new THREE.CylinderGeometry(0.0105, 0.0105, 0.58, 6);
+  brlGeo.rotateX(Math.PI / 2);
+  const clampGeo = new THREE.CylinderGeometry(0.058, 0.058, 0.024, 10);
+  clampGeo.rotateX(Math.PI / 2);
+  const finGeo = new THREE.BoxGeometry(0.24, 0.014, 0.11);
+  const thrustGeo = new THREE.SphereGeometry(0.042, 8, 8);
+  const flashGeo = new THREE.SphereGeometry(0.055, 6, 6);
+
+  const turrets = [];
+  for (let i = 0; i < 6; i++) {
+    const grp = new THREE.Group();
+    const drum = new THREE.Mesh(drumGeo, mats.gunmetal);
+    const collar = new THREE.Mesh(collarGeo, goldHaloMat);
+    const wings = new THREE.Mesh(finGeo, mats.titaniumBronze);
+    wings.position.set(0, 0.01, -0.02);
+    const thruster = new THREE.Mesh(thrustGeo, cyanCoreMat);
+    thruster.position.set(0, 0, -0.14);
+
+    const rotary = new THREE.Group();
+    for (let b = 0; b < 6; b++) {
+      const a = (b / 6) * Math.PI * 2;
+      const brl = new THREE.Mesh(brlGeo, mats.darkSteel);
+      brl.position.set(Math.cos(a) * 0.040, Math.sin(a) * 0.040, 0.34);
+      rotary.add(brl);
+    }
+    const clampMesh = new THREE.Mesh(clampGeo, goldHaloMat);
+    clampMesh.position.z = 0.54;
+    rotary.add(clampMesh);
+
+    const muzzle = new THREE.Object3D();
+    muzzle.position.set(0, 0, 0.68);
+    const flash = new THREE.Mesh(flashGeo, flashMat);
+    flash.position.set(0, 0, 0.65);
+    flash.visible = false;
+
+    grp.add(drum, collar, wings, thruster, rotary, muzzle, flash);
+    root.add(grp);
+    turrets.push({ grp, rotary, muzzle, flash, flashTimer: 0 });
+  }
+
+  return {
+    root,
+    ringGroup,
+    innerOct,
+    turrets,
+    orbitPhase: 0,
+    overdriveBlend: 0
+  };
+}
+
+function updateHaloMinigunFormation(halo, dt, elapsed, opts) {
+  halo.orbitPhase = (halo.orbitPhase + dt * (opts.overdrive ? 2.8 : 1.35)) % (Math.PI * 2);
+  halo.overdriveBlend = damp(halo.overdriveBlend, opts.overdrive ? 1.0 : 0.0, 8.0, dt);
+  const b = halo.overdriveBlend;
+
+  // Animate Golden Halo Rings
+  if (opts.isFirstPerson) {
+    halo.ringGroup.visible = b < 0.85; // Keep center view crystal clear during 1st-person Ult
+    halo.ringGroup.position.set(0, 0.56, 0);
+    halo.ringGroup.rotation.set(Math.PI / 2 - 0.16, 0, halo.orbitPhase * 0.7);
+  } else {
+    halo.ringGroup.visible = true;
+    halo.ringGroup.position.set(0, lerp(0.56, 0.36, b), lerp(0.0, 0.28, b));
+    halo.ringGroup.rotation.set(lerp(Math.PI / 2 - 0.16, 0.10, b), 0, halo.orbitPhase * (1 + b));
+    const rs = lerp(1.0, 1.18, b);
+    halo.ringGroup.scale.set(rs, rs, rs);
+  }
+  halo.innerOct.rotation.z = -halo.orbitPhase * 1.8;
+
+  halo.root.updateMatrixWorld(true);
+
+  const spinSpeed = (opts.overdrive || opts.firing) ? 56.0 : 12.5;
+  for (let k = 0; k < 6; k++) {
+    const t = halo.turrets[k];
+    // 1. Crown Orbit Position (360° circle above head)
+    const ang = halo.orbitPhase + (k / 6) * Math.PI * 2;
+    const bob = Math.sin(elapsed * 3.4 + k * 1.05) * 0.045;
+    const orbX = Math.cos(ang) * 1.42;
+    const orbY = 0.56 + bob;
+    const orbZ = Math.sin(ang) * 1.42;
+
+    // 2. Vạn Pháo Quy Tông Crescent Arch Position (All 6 guns fanned out like floating swords!)
+    const u = (k / 5) * 2.0 - 1.0;
+    const arc = u * 1.18 + Math.sin(elapsed * 5.2 + k) * 0.035;
+    const fanRad = opts.isFirstPerson ? 1.48 : 1.72;
+    const fanX = Math.sin(arc) * fanRad;
+    const fanY = (opts.isFirstPerson ? 0.14 : 0.28) + Math.cos(arc) * (opts.isFirstPerson ? 0.64 : 0.78);
+    const fanZ = opts.isFirstPerson ? (-1.24 - Math.cos(arc) * 0.14) : (-0.24);
+
+    t.grp.position.set(lerp(orbX, fanX, b), lerp(orbY, fanY, b), lerp(orbZ, fanZ, b));
+    const ts = opts.isFirstPerson ? 1.0 : 1.32;
+    t.grp.scale.set(ts, ts, ts);
+    t.grp.lookAt(opts.aimWorldTarget);
+    t.rotary.rotation.z = (t.rotary.rotation.z + dt * spinSpeed) % (Math.PI * 2);
+
+    if (t.flashTimer > 0) {
+      t.flashTimer = Math.max(0, t.flashTimer - dt);
+      t.flash.visible = t.flashTimer > 0;
+    }
+  }
 }
 
 class RemoteOperator {
@@ -4056,6 +4414,8 @@ class RemoteOperator {
     this.netPitch = 0;
     this.crouching = false;
     this.sliding = false;
+    this.hasHalo = isThienName(name);
+    this.vanPhaoActive = false;
     this.weaponIdx = 0;
     this.hp = 100;
     this.alive = true;
@@ -4204,6 +4564,12 @@ class RemoteOperator {
 
     this.nameplate = makeNameplateSprite(this.name);
     this.root.add(this.nameplate);
+
+    // Third-person 6-Minigun Vạn Pháo Halo Crown above THIEN!
+    this.haloRig = createHaloMinigunFormation(mats);
+    this.haloRig.root.position.set(0, 1.58, 0);
+    this.root.add(this.haloRig.root);
+
     this.root.position.copy(this.pos);
 
     this.scene.add(this.root);
@@ -4212,6 +4578,7 @@ class RemoteOperator {
   setName(newName) {
     if (this.name === newName) return;
     this.name = newName;
+    this.hasHalo = isThienName(newName);
     this.root.remove(this.nameplate);
     this.nameplate = makeNameplateSprite(newName);
     this.root.add(this.nameplate);
@@ -4224,6 +4591,8 @@ class RemoteOperator {
     this.netPitch = pitch;
     this.crouching = (flags & 1) !== 0;
     this.sliding = (flags & 2) !== 0;
+    this.hasHalo = (flags & 4) !== 0 || isThienName(this.name);
+    this.vanPhaoActive = (flags & 8) !== 0;
     this.weaponIdx = wpnIdx;
     this.hp = hp;
     if (!this.alive && alive) {
@@ -4244,6 +4613,7 @@ class RemoteOperator {
       this.bodyPivot.rotation.x = -this.deathCollapse * (Math.PI * 0.48);
       this.bodyPivot.position.y = -this.deathCollapse * 0.68;
       this.nameplate.visible = false;
+      if (this.haloRig) this.haloRig.root.visible = false;
       return;
     }
 
@@ -4281,6 +4651,27 @@ class RemoteOperator {
     this.firingSpinTimer = Math.max(0, (this.firingSpinTimer || 0) - dt);
     if (isMini && this.tpRotary) {
       this.tpRotary.rotation.z = (this.tpRotary.rotation.z + dt * (this.firingSpinTimer > 0 ? 54.0 : 9.5)) % (Math.PI * 2);
+    }
+
+    // Update Third-Person 6-Minigun Vạn Pháo Halo Formation above THIEN!
+    if (this.haloRig) {
+      this.haloRig.root.visible = this.hasHalo;
+      if (this.hasHalo) {
+        this.haloRig.root.rotation.x = clamp(this.pitch * 0.65, -0.95, 0.95);
+        const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+        const aimDist = 22.0;
+        const aimTarget = new THREE.Vector3(
+          this.pos.x - Math.sin(this.yaw) * cp * aimDist,
+          this.pos.y + 1.58 + sp * aimDist,
+          this.pos.z - Math.cos(this.yaw) * cp * aimDist
+        );
+        updateHaloMinigunFormation(this.haloRig, dt, performance.now() * 0.001, {
+          overdrive: this.vanPhaoActive,
+          firing: this.firingSpinTimer > 0,
+          aimWorldTarget: aimTarget,
+          isFirstPerson: false
+        });
+      }
     }
 
     // Airborne Creative Hover Pose vs Stride Limb Animation + Spatialized 3D Enemy Footsteps
@@ -4417,16 +4808,18 @@ class CombatVFXSystem {
     this.shellGeo = new THREE.CylinderGeometry(0.006, 0.006, 0.032, 6);
   }
 
-  spawnTracer(startPos, endPos, isHeavy = false) {
+  spawnTracer(startPos, endPos, isHeavy = false, isDivine = false) {
     const dist = startPos.distanceTo(endPos);
     if (dist < 0.6) return;
-    const len = isHeavy ? Math.min(5.5, dist * 0.5) : Math.min(3.2, dist * 0.35);
-    const geo = new THREE.CylinderGeometry(isHeavy ? 0.016 : 0.009, 0.003, len, 6);
+    const len = isDivine ? Math.min(7.2, dist * 0.58) : isHeavy ? Math.min(5.5, dist * 0.5) : Math.min(3.2, dist * 0.35);
+    const geo = new THREE.CylinderGeometry(isDivine ? 0.024 : isHeavy ? 0.016 : 0.009, 0.004, len, 6);
     geo.rotateX(Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({
-      color: isHeavy ? new THREE.Color(4.0, 2.5, 1.1) : new THREE.Color(3.0, 1.9, 0.7),
+      color: isDivine
+        ? new THREE.Color(4.8, 3.2, 0.85)
+        : isHeavy ? new THREE.Color(4.0, 2.5, 1.1) : new THREE.Color(3.0, 1.9, 0.7),
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.94,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
@@ -4435,7 +4828,82 @@ class CombatVFXSystem {
     mesh.lookAt(endPos);
     this.scene.add(mesh);
     const dir = new THREE.Vector3().subVectors(endPos, startPos).normalize();
-    this.tracers.push({ mesh, dir, speed: isHeavy ? 240 : 185, remain: dist - len * 0.5 });
+    this.tracers.push({ mesh, dir, speed: isDivine ? 165 : isHeavy ? 240 : 185, remain: dist - len * 0.5 });
+  }
+
+  spawnTeleportFX(fromPos, toPos) {
+    const burstAt = (p, isArrival) => {
+      const col = isArrival ? new THREE.Color(1.4, 3.8, 4.8) : new THREE.Color(3.8, 2.5, 0.8);
+      const flash = new THREE.PointLight(isArrival ? 0x48e5ff : 0xffbd4a, 22, 14, 1.5);
+      flash.position.set(p.x, p.y + 1.0, p.z);
+      this.scene.add(flash);
+
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.25, 0.55, 24),
+        new THREE.MeshBasicMaterial({
+          color: col,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.92,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(p.x, p.y + 0.15, p.z);
+      this.scene.add(ring);
+
+      const pillar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.28, 0.28, 2.2, 12, 1, true),
+        new THREE.MeshBasicMaterial({
+          color: col,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.88,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        })
+      );
+      pillar.position.set(p.x, p.y + 1.1, p.z);
+      this.scene.add(pillar);
+
+      this.shockwaves.push({ flash, ring, pillar, isBeam: false, maxFlash: 22, ringScale: 6.5, age: 0, dur: 0.36 });
+
+      for (let i = 0; i < 16; i++) {
+        const sp = new THREE.Mesh(this.sparkGeo, this.sparkMat);
+        sp.position.set(p.x, p.y + 0.9 + (Math.random() - 0.5) * 1.1, p.z);
+        const th = Math.random() * Math.PI * 2;
+        const spd = 4 + Math.random() * 9;
+        const vel = new THREE.Vector3(Math.cos(th) * spd, 2 + Math.random() * 6, Math.sin(th) * spd);
+        this.scene.add(sp);
+        this.particles.push({ mesh: sp, vel, life: 0.28 + Math.random() * 0.25 });
+      }
+    };
+
+    burstAt(fromPos, false);
+    burstAt(toPos, true);
+
+    // Connecting Cyan-Gold Warp Lightning Beam
+    const a = new THREE.Vector3(fromPos.x, fromPos.y + 1.05, fromPos.z);
+    const b = new THREE.Vector3(toPos.x, toPos.y + 1.05, toPos.z);
+    const d = a.distanceTo(b);
+    if (d > 0.5) {
+      const beamGeo = new THREE.CylinderGeometry(0.055, 0.055, d, 8, 1, true);
+      beamGeo.rotateX(Math.PI / 2);
+      const beamMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(1.8, 3.8, 4.8),
+        transparent: true,
+        opacity: 0.92,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+      const beam = new THREE.Mesh(beamGeo, beamMat);
+      beam.position.copy(a).lerp(b, 0.5);
+      beam.lookAt(b);
+      this.scene.add(beam);
+      this.shockwaves.push({ flash: null, ring: null, pillar: beam, isBeam: true, age: 0, dur: 0.28 });
+    }
   }
 
   spawnImpact(point, normal, matType) {
@@ -4479,15 +4947,24 @@ class CombatVFXSystem {
     });
   }
 
-  spawnGrenade(origin, velocity, ownerId, onDetonate) {
+  spawnGrenade(origin, velocity, ownerId, onDetonate, customFuse = 2.55, isOrbital = false) {
     const grp = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), this.mats.tacticalCrate);
+    const bodyMat = isOrbital
+      ? new THREE.MeshBasicMaterial({ color: new THREE.Color(4.8, 2.7, 0.65) })
+      : this.mats.tacticalCrate;
+    const body = new THREE.Mesh(new THREE.SphereGeometry(isOrbital ? 0.16 : 0.065, 10, 10), bodyMat);
     const led = new THREE.Mesh(
-      new THREE.SphereGeometry(0.022, 6, 6),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(4.0, 0.3, 0.3) })
+      new THREE.SphereGeometry(isOrbital ? 0.24 : 0.022, 8, 8),
+      new THREE.MeshBasicMaterial({
+        color: isOrbital ? new THREE.Color(4.5, 2.1, 0.4) : new THREE.Color(4.0, 0.3, 0.3),
+        transparent: isOrbital,
+        opacity: isOrbital ? 0.55 : 1.0,
+        blending: isOrbital ? THREE.AdditiveBlending : THREE.NormalBlending,
+        depthWrite: !isOrbital
+      })
     );
-    led.position.y = 0.068;
-    const pt = new THREE.PointLight(0xff2b38, 2.5, 4.5);
+    if (!isOrbital) led.position.y = 0.068;
+    const pt = new THREE.PointLight(isOrbital ? 0xffaa33 : 0xff2b38, isOrbital ? 6.5 : 2.5, isOrbital ? 11.0 : 4.5);
     grp.add(body, led, pt);
     grp.position.copy(origin);
     this.scene.add(grp);
@@ -4498,7 +4975,8 @@ class CombatVFXSystem {
       pt,
       pos: origin.clone(),
       vel: velocity.clone(),
-      fuse: 2.55,
+      fuse: customFuse,
+      isOrbital,
       ownerId,
       onDetonate
     });
@@ -4598,22 +5076,30 @@ class CombatVFXSystem {
       g.vel.y -= 17.5 * dt;
       const next = g.pos.clone().addScaledVector(g.vel, dt);
 
-      // Floor bounce
-      if (next.y < 0.07) {
-        next.y = 0.07;
-        if (Math.abs(g.vel.y) > 1.2) this.audio.playImpact('metal', next);
-        g.vel.y *= -0.45;
-        g.vel.x *= 0.78;
-        g.vel.z *= 0.78;
+      // Floor bounce (or instant impact detonation for Thiên Phạt orbital meteors!)
+      if (next.y < 0.09) {
+        next.y = 0.09;
+        if (g.isOrbital) {
+          g.fuse = 0;
+        } else {
+          if (Math.abs(g.vel.y) > 1.2) this.audio.playImpact('metal', next);
+          g.vel.y *= -0.45;
+          g.vel.x *= 0.78;
+          g.vel.z *= 0.78;
+        }
       }
 
       // Arena box wall/cover bounce
-      const r = 0.08;
+      const r = g.isOrbital ? 0.16 : 0.08;
       for (const b of this.arena.boxes) {
         if (b.maxY <= 0.02) continue;
         if (next.x + r > b.minX && next.x - r < b.maxX &&
             next.y + r > b.minY && next.y - r < b.maxY &&
             next.z + r > b.minZ && next.z - r < b.maxZ) {
+          if (g.isOrbital) {
+            g.fuse = 0;
+            break;
+          }
           const ox1 = (next.x + r) - b.minX, ox2 = b.maxX - (next.x - r);
           const oy1 = (next.y + r) - b.minY, oy2 = b.maxY - (next.y - r);
           const oz1 = (next.z + r) - b.minZ, oz2 = b.maxZ - (next.z - r);
@@ -4637,36 +5123,51 @@ class CombatVFXSystem {
       g.grp.rotation.x += g.vel.z * dt * 3;
       g.grp.rotation.z -= g.vel.x * dt * 3;
 
-      // Accelerating red fuse strobe
+      // Accelerating red fuse strobe (or steady blazing sun-core for orbital meteors)
       g.fuse -= dt;
-      const blink = Math.sin((2.6 - g.fuse) * (2.6 - g.fuse) * 18.0) > 0;
-      g.led.visible = blink;
-      g.pt.intensity = blink ? 3.2 : 0.2;
+      if (!g.isOrbital) {
+        const blink = Math.sin((2.6 - g.fuse) * (2.6 - g.fuse) * 18.0) > 0;
+        g.led.visible = blink;
+        g.pt.intensity = blink ? 3.2 : 0.2;
+      }
 
       if (g.fuse <= 0) {
         this.scene.remove(g.grp);
         this.triggerExplosionVFX(g.pos);
-        if (g.onDetonate) g.onDetonate(g.pos, g.ownerId);
+        if (g.onDetonate) g.onDetonate(g.pos, g.ownerId, g.isOrbital);
         this.grenades.splice(i, 1);
       }
     }
 
-    // Explosion Shockwaves
+    // Explosion & Teleport Shockwaves / Lightning Pillars
     for (let i = this.shockwaves.length - 1; i >= 0; i--) {
       const sw = this.shockwaves[i];
       sw.age += dt;
       const p = sw.age / sw.dur;
       if (p >= 1) {
-        this.scene.remove(sw.flash);
-        this.scene.remove(sw.ring);
-        sw.ring.geometry.dispose();
-        sw.ring.material.dispose();
+        if (sw.flash) this.scene.remove(sw.flash);
+        if (sw.ring) {
+          this.scene.remove(sw.ring);
+          sw.ring.geometry.dispose();
+          sw.ring.material.dispose();
+        }
+        if (sw.pillar) {
+          this.scene.remove(sw.pillar);
+          sw.pillar.geometry.dispose();
+          sw.pillar.material.dispose();
+        }
         this.shockwaves.splice(i, 1);
       } else {
-        sw.flash.intensity = 28 * (1 - p) * (1 - p);
-        const s = 1 + p * 11.5;
-        sw.ring.scale.set(s, s, 1);
-        sw.ring.material.opacity = (1 - p) * 0.85;
+        if (sw.flash) sw.flash.intensity = (sw.maxFlash || 28) * (1 - p) * (1 - p);
+        if (sw.ring) {
+          const s = 1 + p * (sw.ringScale || 11.5);
+          sw.ring.scale.set(s, s, 1);
+          sw.ring.material.opacity = (1 - p) * 0.85;
+        }
+        if (sw.pillar) {
+          sw.pillar.material.opacity = (1 - p) * 0.88;
+          if (!sw.isBeam) sw.pillar.scale.set(1 + p * 1.45, 1, 1 + p * 1.45);
+        }
       }
     }
   }
@@ -4997,8 +5498,17 @@ class IronveilEngine {
     this.creatorMode = isThienName(this.myName);
     this.isFlying = false;
     this._lastSpaceTap = 0;
+    this.vanPhaoTimer = 0;
+    this.vanPhaoCd = 0;
+    this.vanPhaoFireAccum = 0;
+    this.vanPhaoTurretIdx = 0;
+    this.blinkCd = 0;
+    this.orbitalCd = 0;
+    this._haloAssistTick = 0;
     const initSlot4 = document.getElementById('slot-4');
     if (initSlot4) initSlot4.style.display = this.creatorMode ? 'inline-block' : 'none';
+    const initSkillBar = document.getElementById('thien-skill-bar');
+    if (initSkillBar) initSkillBar.style.display = this.creatorMode ? 'flex' : 'none';
 
     this.inMatch = false;
     this.paused = false;
@@ -5107,6 +5617,8 @@ class IronveilEngine {
     this.arena = new ArenaWorld(this.worldScene, this.mats);
     this.viewmodel = new ViewmodelRig(this.viewmodelScene, this.viewmodelCamera, this.mats, this.audio);
     this.worldScene.add(this.viewmodel.laserDot);
+    this.localHalo = createHaloMinigunFormation(this.mats);
+    this.worldScene.add(this.localHalo.root);
     this.vfx = new CombatVFXSystem(this.worldScene, this.mats, this.audio, this.arena);
 
     this.applyQualityPreset('ultra');
@@ -5609,18 +6121,25 @@ class IronveilEngine {
       op.netVel.set(d[5], d[6], d[7]);
       op.crouching = (d[8] & 1) !== 0;
       op.sliding = (d[8] & 2) !== 0;
+      op.hasHalo = (d[8] & 4) !== 0 || isThienName(op.name);
+      op.vanPhaoActive = (d[8] & 8) !== 0;
       op.weaponIdx = d[9];
     } else if (msg.t === 'fire') {
       op.firingSpinTimer = 0.16;
-      this.spawnRemoteShotFX(msg.o, msg.e, msg.w, msg.mat);
-      this.broadcastFromHost({ t: 'fx_fire', id: pid, o: msg.o, e: msg.e, w: msg.w, mat: msg.mat }, pid);
+      this.spawnRemoteShotFX(msg.o, msg.e, msg.w, msg.mat, !!msg.div);
+      this.broadcastFromHost({ t: 'fx_fire', id: pid, o: msg.o, e: msg.e, w: msg.w, mat: msg.mat, div: msg.div }, pid);
     } else if (msg.t === 'nade') {
       const orig = new THREE.Vector3(...msg.o);
       const vel = new THREE.Vector3(...msg.v);
-      this.vfx.spawnGrenade(orig, vel, pid, (bPos, owner) => this.hostEvaluateExplosion(bPos, owner));
-      this.broadcastFromHost({ t: 'fx_nade', o: msg.o, v: msg.v }, pid);
+      const fuse = msg.fuse || 2.55;
+      const isOrb = !!msg.orb;
+      this.vfx.spawnGrenade(orig, vel, pid, (bPos, owner, orb) => this.hostEvaluateExplosion(bPos, owner, orb), fuse, isOrb);
+      this.broadcastFromHost({ t: 'fx_nade', o: msg.o, v: msg.v, fuse, orb: msg.orb }, pid);
+    } else if (msg.t === 'skill_fx') {
+      this.playRemoteSkillFX(msg);
+      this.broadcastFromHost(msg, pid);
     } else if (msg.t === 'hit') {
-      this.hostProcessDamage(pid, msg.targetId, msg.dmg, msg.head, WEAPON_SPECS[msg.w]?.slotLabel || 'MCX', msg.dir);
+      this.hostProcessDamage(pid, msg.targetId, msg.dmg, msg.head, msg.wl || WEAPON_SPECS[msg.w]?.slotLabel || 'MCX', msg.dir);
     } else if (msg.t === 'ping') {
       if (msg.lastRtt) op.ping = Math.round(msg.lastRtt);
       conn.send({ t: 'pong', cTime: msg.cTime });
@@ -5676,9 +6195,11 @@ class IronveilEngine {
     } else if (msg.t === 'fx_fire') {
       const shooter = this.remotes.get(msg.id);
       if (shooter) shooter.firingSpinTimer = 0.16;
-      this.spawnRemoteShotFX(msg.o, msg.e, msg.w, msg.mat);
+      this.spawnRemoteShotFX(msg.o, msg.e, msg.w, msg.mat, !!msg.div);
     } else if (msg.t === 'fx_nade') {
-      this.vfx.spawnGrenade(new THREE.Vector3(...msg.o), new THREE.Vector3(...msg.v), 'remote', null);
+      this.vfx.spawnGrenade(new THREE.Vector3(...msg.o), new THREE.Vector3(...msg.v), 'remote', null, msg.fuse || 2.55, !!msg.orb);
+    } else if (msg.t === 'skill_fx') {
+      this.playRemoteSkillFX(msg);
     } else if (msg.t === 'dmg') {
       if (msg.victimId === this.myId) {
         this.onLocalDamaged(msg.hp, msg.fromPos);
@@ -5741,23 +6262,25 @@ class IronveilEngine {
     return bestSp;
   }
 
-  hostEvaluateExplosion(blastPos, attackerId) {
-    const maxR = 6.8;
+  hostEvaluateExplosion(blastPos, attackerId, isOrbital = false) {
+    const maxR = isOrbital ? 7.8 : 6.8;
     const candidates = [{ id: 'host', pos: this.pos, alive: this.alive }];
     for (const [id, op] of this.remotes.entries()) {
       candidates.push({ id, pos: op.pos, alive: op.alive });
     }
     for (const c of candidates) {
       if (!c.alive) continue;
+      // THIEN is immune to self-orbital splash so dropping meteors at close range never self-kills!
+      if (isOrbital && c.id === attackerId) continue;
       const targetCenter = new THREE.Vector3(c.pos.x, c.pos.y + 1.0, c.pos.z);
       const dist = blastPos.distanceTo(targetCenter);
       if (dist < maxR) {
         const dir = new THREE.Vector3().subVectors(targetCenter, blastPos).normalize();
         const wall = this.arena.raycastWorld(blastPos.clone().add(new THREE.Vector3(0, 0.2, 0)), dir, dist);
         if (!wall || wall.dist >= dist - 0.3) {
-          const dmg = Math.round(135 * (1 - dist / maxR));
+          const dmg = Math.round((isOrbital ? 110 : 135) * (1 - dist / maxR));
           if (dmg > 4) {
-            this.hostProcessDamage(attackerId, c.id, dmg, false, 'FRAG', [dir.x, dir.y, dir.z]);
+            this.hostProcessDamage(attackerId, c.id, dmg, false, isOrbital ? 'THIÊN PHẠT' : 'FRAG', [dir.x, dir.y, dir.z]);
           }
         }
       }
@@ -5924,6 +6447,8 @@ class IronveilEngine {
     this.creatorMode = isThienName(this.myName);
     const slot4 = document.getElementById('slot-4');
     if (slot4) slot4.style.display = this.creatorMode ? 'inline-block' : 'none';
+    const skillBar = document.getElementById('thien-skill-bar');
+    if (skillBar) skillBar.style.display = this.creatorMode ? 'flex' : 'none';
 
     this.pos.set(sp.x, sp.y, sp.z);
     this.vel.set(0, 0, 0);
@@ -5933,6 +6458,10 @@ class IronveilEngine {
     this.alive = true;
     this.reloading = false;
     this.boltTimer = 0;
+    this.vanPhaoTimer = 0;
+    this.vanPhaoCd = 0;
+    this.blinkCd = 0;
+    this.orbitalCd = 0;
     this.mags = WEAPON_SPECS.map(s => s.magSize);
 
     if (this.creatorMode) {
@@ -6131,14 +6660,19 @@ class IronveilEngine {
     } else if (this.hostConn && this.hostConn.open) {
       this.hostConn.send({ t: 'fire', o: oArr, e: eArr, w: this.wpnIdx, mat: hitMat });
     }
+
+    // Passive THIEN Halo Assist: Orbiting 6-barrel crown guns also spit converging golden fire on LMB!
+    if (this.creatorMode && this.vanPhaoTimer <= 0 && (this._haloAssistTick++ % 2 === 0)) {
+      this.fireSingleHaloTurret((this.vanPhaoTurretIdx++) % 6, endPoint, false);
+    }
   }
 
-  spawnRemoteShotFX(oArr, eArr, wIdx, matType) {
+  spawnRemoteShotFX(oArr, eArr, wIdx, matType, isDivine = false) {
     const start = new THREE.Vector3(oArr[0], oArr[1], oArr[2]);
     const end = new THREE.Vector3(eArr[0], eArr[1], eArr[2]);
     const spec = WEAPON_SPECS[wIdx] || WEAPON_SPECS[0];
     this.audio.playGunshot(spec.id, start);
-    this.vfx.spawnTracer(start, end, spec.id === 'ax50' || spec.id === 'minigun');
+    this.vfx.spawnTracer(start, end, spec.id === 'ax50' || spec.id === 'minigun', isDivine);
 
     if (matType && matType !== 'none' && matType !== 'flesh') {
       const normal = new THREE.Vector3().subVectors(start, end).normalize();
@@ -6178,6 +6712,266 @@ class IronveilEngine {
     } else if (this.hostConn && this.hostConn.open) {
       this.vfx.spawnGrenade(origin, throwVel, this.myId, null);
       this.hostConn.send({ t: 'nade', o: oArr, v: vArr });
+    }
+  }
+
+  /* ================= THIEN DIVINE SKILLS: [Q] VẠN PHÁO • [E] TELE • [X] THIÊN PHẠT ================= */
+
+  playRemoteSkillFX(msg) {
+    if (!msg) return;
+    if (msg.kind === 'blink' && msg.f && msg.to) {
+      const fromPos = new THREE.Vector3(msg.f[0], msg.f[1], msg.f[2]);
+      const toPos = new THREE.Vector3(msg.to[0], msg.to[1], msg.to[2]);
+      this.vfx.spawnTeleportFX(fromPos, toPos);
+      this.audio.playSkillSFX('blink', toPos);
+    } else if (msg.kind === 'vanphao' && msg.p) {
+      const p = new THREE.Vector3(msg.p[0], msg.p[1], msg.p[2]);
+      this.audio.playSkillSFX('vanphao', p);
+      showToast(`⚠ ${msg.name || 'THIEN'} KÍCH HOẠT: VẠN PHÁO QUY TÔNG! ⚠`);
+    } else if (msg.kind === 'orbital' && msg.p) {
+      const p = new THREE.Vector3(msg.p[0], msg.p[1], msg.p[2]);
+      this.audio.playSkillSFX('orbital', p);
+      showToast(`⚠ CẢNH BÁO: ${msg.name || 'THIEN'} TRIỆU HỒI THIÊN PHẠT! ⚠`);
+    }
+  }
+
+  broadcastSkillFX(payload) {
+    if (this.isHost) {
+      this.broadcastFromHost(payload);
+    } else if (this.hostConn && this.hostConn.open) {
+      this.hostConn.send(payload);
+    }
+  }
+
+  findBestVanPhaoTarget() {
+    const camPos = this.worldCamera.position;
+    const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.worldCamera.quaternion);
+    let bestOp = null;
+    let bestScore = -999;
+
+    for (const op of this.remotes.values()) {
+      if (!op.alive) continue;
+      const aimPt = new THREE.Vector3(op.pos.x, op.pos.y + (op.crouching ? 1.05 : 1.38), op.pos.z);
+      const toOp = new THREE.Vector3().subVectors(aimPt, camPos);
+      const dist = toOp.length();
+      if (dist > 110 || dist < 0.2) continue;
+      const dir = toOp.clone().divideScalar(dist);
+      const dot = camFwd.dot(dir); // Prefer enemies in front, but still lock enemies anywhere around THIEN!
+      const wall = this.arena.raycastWorld(camPos, dir, dist);
+      const hasLos = !wall || wall.dist >= dist - 0.55;
+      const score = (hasLos ? 10.0 : 0.0) + dot * 3.5 - dist * 0.03;
+      if (score > bestScore) {
+        bestScore = score;
+        bestOp = { op, point: aimPt };
+      }
+    }
+    return bestOp;
+  }
+
+  fireSingleHaloTurret(tIdx, fallbackTarget, isUlt = false) {
+    if (!this.localHalo || !this.inMatch || !this.alive) return;
+    const turret = this.localHalo.turrets[tIdx % 6];
+    turret.flashTimer = 0.05;
+    turret.flash.visible = true;
+
+    this.localHalo.root.updateMatrixWorld(true);
+    const muzzlePos = new THREE.Vector3();
+    turret.muzzle.getWorldPosition(muzzlePos);
+
+    let targetPt = fallbackTarget ? fallbackTarget.clone() : null;
+    if (isUlt) {
+      const locked = this.findBestVanPhaoTarget();
+      if (locked) targetPt = locked.point.clone();
+    }
+    if (!targetPt) {
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.worldCamera.quaternion);
+      targetPt = this.worldCamera.position.clone().addScaledVector(fwd, 45);
+    }
+
+    const rayDir = new THREE.Vector3().subVectors(targetPt, muzzlePos).normalize();
+    const spread = isUlt ? 0.016 : 0.012;
+    rayDir.x += (Math.random() - 0.5) * spread;
+    rayDir.y += (Math.random() - 0.5) * spread;
+    rayDir.z += (Math.random() - 0.5) * spread;
+    rayDir.normalize();
+
+    const worldHit = this.arena.raycastWorld(muzzlePos, rayDir, 130);
+    let maxDist = worldHit ? worldHit.dist : 130;
+    let endPoint = worldHit ? worldHit.point : muzzlePos.clone().addScaledVector(rayDir, 130);
+    let hitMat = worldHit ? worldHit.matType : 'none';
+
+    let hitOp = null;
+    let hitResult = null;
+    for (const op of this.remotes.values()) {
+      const res = op.raycastHit(muzzlePos, rayDir, maxDist);
+      if (res && res.dist < maxDist) {
+        maxDist = res.dist;
+        hitOp = op;
+        hitResult = res;
+      }
+    }
+
+    if (isUlt && (tIdx % 2 === 0)) {
+      this.audio.playGunshot('minigun', null);
+    }
+
+    if (hitOp && hitResult) {
+      endPoint = hitResult.point;
+      hitMat = 'flesh';
+      this.vfx.spawnTracer(muzzlePos, endPoint, true, true);
+      this.vfx.spawnImpact(endPoint, rayDir.clone().negate(), 'flesh');
+      hitOp.triggerHitFlash();
+
+      const dmg = hitResult.head ? (isUlt ? 34 : 18) : (isUlt ? 15 : 9);
+      const willKill = (hitOp.hp - dmg) <= 0;
+      this.audio.playHitmarker(hitResult.head, willKill && !this.isHost);
+      this.triggerHitmarkerUI(hitResult.head);
+
+      if (this.isHost) {
+        this.hostProcessDamage('host', hitOp.id, dmg, hitResult.head, 'VẠN PHÁO', [rayDir.x, rayDir.y, rayDir.z]);
+      } else if (this.hostConn && this.hostConn.open) {
+        this.hostConn.send({
+          t: 'hit',
+          targetId: hitOp.id,
+          dmg,
+          head: hitResult.head,
+          w: 3,
+          wl: 'VẠN PHÁO',
+          dir: [rayDir.x, rayDir.y, rayDir.z]
+        });
+      }
+    } else {
+      this.vfx.spawnTracer(muzzlePos, endPoint, true, true);
+      if (worldHit) {
+        this.vfx.spawnImpact(worldHit.point, worldHit.normal, worldHit.matType);
+      }
+    }
+
+    const oArr = [+muzzlePos.x.toFixed(2), +muzzlePos.y.toFixed(2), +muzzlePos.z.toFixed(2)];
+    const eArr = [+endPoint.x.toFixed(2), +endPoint.y.toFixed(2), +endPoint.z.toFixed(2)];
+    if (this.isHost) {
+      this.broadcastFromHost({ t: 'fx_fire', id: 'host', o: oArr, e: eArr, w: 3, mat: hitMat, div: 1 });
+    } else if (this.hostConn && this.hostConn.open) {
+      this.hostConn.send({ t: 'fire', o: oArr, e: eArr, w: 3, mat: hitMat, div: 1 });
+    }
+  }
+
+  castVanPhaoQuyTong() {
+    if (!this.creatorMode || !this.alive || this.roundFreezeTimer > 0) return;
+    if (this.vanPhaoTimer > 0 || this.vanPhaoCd > 0) return;
+
+    this.vanPhaoTimer = 6.0;
+    this.vanPhaoCd = 8.5; // 6.0s active storm + 2.5s cooldown after completion
+    this.vanPhaoFireAccum = 0;
+    this.audio.playSkillSFX('vanphao', null);
+    this.camRecoil.impulse(0.22, 0, 0);
+    this.showCenterBanner('★ VẠN PHÁO QUY TÔNG ★', '6 KHẨU 6-NÒNG HỘ THỂ TỰ ĐỘNG KHÓA MỤC TIÊU!');
+
+    this.broadcastSkillFX({
+      t: 'skill_fx',
+      kind: 'vanphao',
+      name: this.myName,
+      p: [+this.pos.x.toFixed(2), +this.pos.y.toFixed(2), +this.pos.z.toFixed(2)]
+    });
+  }
+
+  castBlinkTeleport() {
+    if (!this.creatorMode || !this.alive || this.blinkCd > 0 || this.roundFreezeTimer > 0) return;
+    this.blinkCd = 0.55;
+
+    const fromPos = this.pos.clone();
+    const camOrig = this.worldCamera.position.clone();
+    const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.worldCamera.quaternion);
+
+    const worldHit = this.arena.raycastWorld(camOrig, camFwd, 30.0);
+    let targetPos;
+    if (worldHit) {
+      targetPos = worldHit.point.clone().addScaledVector(worldHit.normal, 0.72);
+      if (worldHit.normal.y > 0.5) {
+        targetPos.y = worldHit.point.y + (this.isFlying ? 0.35 : 0.02);
+      } else {
+        targetPos.y -= 0.85;
+      }
+    } else {
+      targetPos = camOrig.clone().addScaledVector(camFwd, 18.5);
+      targetPos.y -= 1.0;
+      this.isFlying = true;
+    }
+
+    targetPos.x = clamp(targetPos.x, -20.8, 20.8);
+    targetPos.z = clamp(targetPos.z, -16.8, 16.8);
+    targetPos.y = clamp(targetPos.y, 0.05, 21.8);
+
+    this.pos.copy(targetPos);
+    this.vel.set(0, 0, 0);
+    // Clean single collision push-out so teleport never wedges inside a crate
+    resolveCharacterPhysics(this.pos, this.vel, 0.34, 1.72, 0.001, this.arena, true);
+    this.pos.y = clamp(targetPos.y, 0.05, 21.8);
+
+    this.worldCamera.fov = Math.min(114, this.worldCamera.fov + 15);
+    this.worldCamera.updateProjectionMatrix();
+
+    this.audio.playSkillSFX('blink', null);
+    this.vfx.spawnTeleportFX(fromPos, this.pos);
+
+    this.broadcastSkillFX({
+      t: 'skill_fx',
+      kind: 'blink',
+      f: [+fromPos.x.toFixed(2), +fromPos.y.toFixed(2), +fromPos.z.toFixed(2)],
+      to: [+this.pos.x.toFixed(2), +this.pos.y.toFixed(2), +this.pos.z.toFixed(2)]
+    });
+  }
+
+  castThienPhatOrbital() {
+    if (!this.creatorMode || !this.alive || this.orbitalCd > 0 || this.roundFreezeTimer > 0) return;
+    this.orbitalCd = 3.0;
+
+    const camOrig = this.worldCamera.position.clone();
+    const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.worldCamera.quaternion);
+    const wHit = this.arena.raycastWorld(camOrig, camFwd, 95.0);
+    let centerPt = wHit ? wHit.point.clone() : camOrig.clone().addScaledVector(camFwd, 24.0);
+
+    // Snap orbital strike center onto nearest locked enemy if aiming close to them!
+    const locked = this.findBestVanPhaoTarget();
+    if (locked && wHit && locked.point.distanceTo(wHit.point) < 6.5) {
+      centerPt.copy(locked.op.pos);
+    }
+
+    const cx = clamp(centerPt.x, -19.5, 19.5);
+    const cz = clamp(centerPt.z, -15.5, 15.5);
+
+    this.audio.playSkillSFX('orbital', null);
+    this.camRecoil.impulse(0.28, 0, 0);
+    this.showCenterBanner('★ THIÊN PHẠT GIÁNG THẾ ★', 'MƯA ĐẠI PHÁO HỦY DIỆT TỪ BẦU TRỜI!');
+
+    this.broadcastSkillFX({
+      t: 'skill_fx',
+      kind: 'orbital',
+      name: this.myName,
+      p: [cx, 2.0, cz]
+    });
+
+    // Rain 8 Blazing Golden Meteors from Y = 23.5m across the target zone!
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 7) * Math.PI * 2 + Math.random() * 0.35;
+      const rad = i === 0 ? 0.0 : (1.7 + (i % 3) * 1.25);
+      const ox = clamp(cx + Math.cos(ang) * rad, -20.8, 20.8);
+      const oz = clamp(cz + Math.sin(ang) * rad, -16.8, 16.8);
+      const oy = 22.8 + i * 1.15;
+      const orig = new THREE.Vector3(ox, oy, oz);
+      const vel = new THREE.Vector3((Math.random() - 0.5) * 1.8, -(23.5 + i * 1.2), (Math.random() - 0.5) * 1.8);
+      const fuse = 1.45;
+
+      const oArr = [+orig.x.toFixed(2), +orig.y.toFixed(2), +orig.z.toFixed(2)];
+      const vArr = [+vel.x.toFixed(2), +vel.y.toFixed(2), +vel.z.toFixed(2)];
+
+      if (this.isHost) {
+        this.vfx.spawnGrenade(orig, vel, 'host', (bPos, owner, orb) => this.hostEvaluateExplosion(bPos, owner, orb), fuse, true);
+        this.broadcastFromHost({ t: 'fx_nade', o: oArr, v: vArr, fuse, orb: 1 });
+      } else if (this.hostConn && this.hostConn.open) {
+        this.vfx.spawnGrenade(orig, vel, this.myId, null, fuse, true);
+        this.hostConn.send({ t: 'nade', o: oArr, v: vArr, fuse, orb: 1 });
+      }
     }
   }
 
@@ -6285,14 +7079,14 @@ class IronveilEngine {
       } else {
         this.spawnLocalAt(this.arena.spawnPoints[0]);
         if (this.creatorMode) {
-          this.showCenterBanner('CREATIVE MODE // M134 VULCAN', 'SPACE: BAY LÊN • C/CTRL: HẠ XUỐNG • SHIFT: TĂNG TỐC • V: BẬT/TẮT BAY');
+          this.showCenterBanner('CREATIVE MODE // M134 VULCAN', 'Q: VẠN PHÁO 6-NÒNG • E: TỐC BIẾN TELE • X: THIÊN PHẠT • SPACE/C: BAY');
         } else {
           this.showCenterBanner('OPERATION KRONOS-04', 'WEAPONS FREE // ELIMINATE ALL HOSTILES');
         }
       }
     } else if (fromNetwork) {
       if (this.creatorMode) {
-        this.showCenterBanner('CREATIVE MODE // M134 VULCAN', 'SPACE: BAY LÊN • C/CTRL: HẠ XUỐNG • V: BẬT/TẮT BAY');
+        this.showCenterBanner('CREATIVE MODE // M134 VULCAN', 'Q: VẠN PHÁO 6-NÒNG • E: TỐC BIẾN TELE • X: THIÊN PHẠT • SPACE/C: BAY');
       } else {
         this.showCenterBanner(
           this.gameMode === 'duel' ? 'ROUND 1' : 'OPERATION KRONOS-04',
@@ -6352,9 +7146,11 @@ class IronveilEngine {
     this.creatorMode = isThienName(this.myName);
     const slot4 = document.getElementById('slot-4');
     if (slot4) slot4.style.display = this.creatorMode ? 'inline-block' : 'none';
+    const skillBar = document.getElementById('thien-skill-bar');
+    if (skillBar) skillBar.style.display = this.creatorMode ? 'flex' : 'none';
 
     if (!wasCreator && this.creatorMode && !this.inMatch) {
-      showToast('★ CHẾ ĐỘ SÁNG TẠO [THIEN] ĐÃ BẬT: BAY TỰ DO + 6-NÒNG VÔ HẠN ĐẠN! ★');
+      showToast('★ [THIEN] ĐÃ KÍCH HOẠT: BAY TỰ DO + 6-NÒNG HỘ THỂ + [Q] VẠN PHÁO • [E] TELE • [X] THIÊN PHẠT! ★');
     }
     if (wasCreator !== this.creatorMode) {
       if (this.creatorMode) {
@@ -6384,6 +7180,7 @@ class IronveilEngine {
   updateLocalPlayer(dt) {
     if (!this.alive) {
       this.viewmodel.adsAlpha = 0;
+      if (this.localHalo) this.localHalo.root.visible = false;
       document.getElementById('sniper-scope-overlay').classList.remove('active');
       if (this.gameMode === 'ffa') {
         this.respawnTimer = Math.max(0, this.respawnTimer - dt);
@@ -6406,6 +7203,10 @@ class IronveilEngine {
     }
 
     this.grenadeCooldown = Math.max(0, this.grenadeCooldown - dt);
+    this.vanPhaoTimer = Math.max(0, this.vanPhaoTimer - dt);
+    this.vanPhaoCd = Math.max(0, this.vanPhaoCd - dt);
+    this.blinkCd = Math.max(0, this.blinkCd - dt);
+    this.orbitalCd = Math.max(0, this.orbitalCd - dt);
     this.fireTimer = Math.max(0, this.fireTimer - dt);
     this.boltTimer = Math.max(0, this.boltTimer - dt);
     this.dynamicSpread = Math.max(0, this.dynamicSpread - dt * 0.14);
@@ -6595,6 +7396,39 @@ class IronveilEngine {
       }
     }
 
+    // Update Local 6-Minigun Vạn Pháo Halo Crown & [Q] Auto-Seeking Barrage!
+    if (this.localHalo) {
+      this.localHalo.root.visible = !!this.creatorMode;
+      if (this.creatorMode) {
+        this.localHalo.root.position.set(this.pos.x, this.pos.y + this.eyeHeight, this.pos.z);
+        this.localHalo.root.rotation.order = 'YXZ';
+        this.localHalo.root.rotation.set(clamp(this.pitch * 0.78, -1.15, 1.15), this.yaw, 0);
+
+        const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.worldCamera.quaternion);
+        const wHit = this.arena.raycastWorld(this.worldCamera.position, camFwd, 90);
+        let haloTarget = wHit ? wHit.point : this.worldCamera.position.clone().addScaledVector(camFwd, 45);
+        if (this.vanPhaoTimer > 0) {
+          const locked = this.findBestVanPhaoTarget();
+          if (locked) haloTarget = locked.point;
+        }
+
+        updateHaloMinigunFormation(this.localHalo, dt, performance.now() * 0.001, {
+          overdrive: this.vanPhaoTimer > 0,
+          firing: wantFire || this.vanPhaoTimer > 0,
+          aimWorldTarget: haloTarget,
+          isFirstPerson: true
+        });
+
+        if (this.vanPhaoTimer > 0 && canMove) {
+          this.vanPhaoFireAccum += dt;
+          while (this.vanPhaoFireAccum >= 0.058) {
+            this.vanPhaoFireAccum -= 0.058;
+            this.fireSingleHaloTurret((this.vanPhaoTurretIdx++) % 6, haloTarget, true);
+          }
+        }
+      }
+    }
+
     // Update Viewmodel Rig & Synchronized Arena Lighting
     this.viewmodel.syncLighting(this.worldCamera, this.arena, this.pos);
     this.viewmodel.update(dt, {
@@ -6665,7 +7499,10 @@ class IronveilEngine {
       }
     }
 
-    const flags = (this.crouching ? 1 : 0) | (this.sliding ? 2 : 0);
+    const flags = (this.crouching ? 1 : 0)
+      | (this.sliding ? 2 : 0)
+      | (this.creatorMode ? 4 : 0)
+      | ((this.creatorMode && this.vanPhaoTimer > 0) ? 8 : 0);
 
     if (this.isHost && this.clientConns.size > 0) {
       const snap = [[
@@ -6676,7 +7513,10 @@ class IronveilEngine {
         flags, Math.round(this.hp), this.alive ? 1 : 0, this.wpnIdx
       ]];
       for (const [id, op] of this.remotes.entries()) {
-        const rFlags = (op.crouching ? 1 : 0) | (op.sliding ? 2 : 0);
+        const rFlags = (op.crouching ? 1 : 0)
+          | (op.sliding ? 2 : 0)
+          | (op.hasHalo ? 4 : 0)
+          | (op.vanPhaoActive ? 8 : 0);
         snap.push([
           id,
           +op.netPos.x.toFixed(2), +op.netPos.y.toFixed(2), +op.netPos.z.toFixed(2),
@@ -6743,6 +7583,37 @@ class IronveilEngine {
     const gSlot = document.getElementById('slot-g');
     gSlot.textContent = this.grenadeCooldown > 0 ? `[G] ${Math.ceil(this.grenadeCooldown)}S` : '[G] FRAG';
     gSlot.classList.toggle('ready', this.grenadeCooldown <= 0);
+
+    // Update THIEN Divine Arsenal Skill Bar ([Q] Vạn Pháo • [E] Tốc Biến • [X] Thiên Phạt)
+    if (this.creatorMode) {
+      const qCard = document.getElementById('sk-q-card');
+      const qCd = document.getElementById('sk-q-cd');
+      if (this.vanPhaoTimer > 0) {
+        qCard.className = 'skill-card active-ult';
+        qCd.textContent = `ĐANG XẢ ${this.vanPhaoTimer.toFixed(1)}S`;
+        qCd.style.color = '#ffe07d';
+      } else if (this.vanPhaoCd > 0) {
+        qCard.className = 'skill-card';
+        qCd.textContent = `HỒI ${this.vanPhaoCd.toFixed(1)}S`;
+        qCd.style.color = 'var(--text-muted)';
+      } else {
+        qCard.className = 'skill-card ready';
+        qCd.textContent = 'SẴN SÀNG';
+        qCd.style.color = 'var(--cyan)';
+      }
+
+      const eCard = document.getElementById('sk-e-card');
+      const eCd = document.getElementById('sk-e-cd');
+      eCard.className = this.blinkCd <= 0 ? 'skill-card ready' : 'skill-card';
+      eCd.textContent = this.blinkCd > 0 ? `${this.blinkCd.toFixed(1)}S` : 'SẴN SÀNG';
+      eCd.style.color = this.blinkCd > 0 ? 'var(--text-muted)' : 'var(--cyan)';
+
+      const xCard = document.getElementById('sk-x-card');
+      const xCd = document.getElementById('sk-x-cd');
+      xCard.className = this.orbitalCd <= 0 ? 'skill-card ready' : 'skill-card';
+      xCd.textContent = this.orbitalCd > 0 ? `HỒI ${this.orbitalCd.toFixed(1)}S` : 'SẴN SÀNG';
+      xCd.style.color = this.orbitalCd > 0 ? 'var(--text-muted)' : 'var(--cyan)';
+    }
 
     // Dynamic Crosshair Spread & ADS Fade
     const ch = document.getElementById('crosshair');
@@ -6912,6 +7783,7 @@ class IronveilEngine {
       this.tacPass.uniforms.uTime.value = elapsed;
       this.weaponPass.enabled = this.alive;
     } else {
+      if (this.localHalo) this.localHalo.root.visible = false;
       for (const op of this.remotes.values()) {
         op.update(dt, null, this.arena);
       }
@@ -7158,6 +8030,9 @@ class IronveilEngine {
       else if (e.code === 'Digit2') this.switchWeapon(1);
       else if (e.code === 'Digit3') this.switchWeapon(2);
       else if (e.code === 'Digit4' && this.creatorMode) this.switchWeapon(3);
+      else if (e.code === 'KeyQ' && this.creatorMode && !e.repeat) this.castVanPhaoQuyTong();
+      else if (e.code === 'KeyE' && this.creatorMode && !e.repeat) this.castBlinkTeleport();
+      else if (e.code === 'KeyX' && this.creatorMode && !e.repeat) this.castThienPhatOrbital();
       else if (e.code === 'KeyR') this.startReload();
       else if (e.code === 'KeyF') this.viewmodel.triggerInspect();
       else if (e.code === 'KeyG') this.throwFragGrenade();
