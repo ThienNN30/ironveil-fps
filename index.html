@@ -1205,6 +1205,7 @@
       <span class="slot-pill active" id="slot-1">[1] MCX</span>
       <span class="slot-pill" id="slot-2">[2] AX-50</span>
       <span class="slot-pill" id="slot-3">[3] 2011</span>
+      <span class="slot-pill" id="slot-4" style="display:none; color:#ffb84d; border-color:rgba(255,184,77,0.5);">[4] 6-NÒNG</span>
       <span class="slot-pill ready" id="slot-g">[G] FRAG</span>
     </div>
   </div>
@@ -1355,6 +1356,17 @@ class Spring3D {
     this.pos.y += this.vel.y * step;
     this.pos.z += this.vel.z * step;
   }
+}
+
+function isThienName(name) {
+  if (!name) return false;
+  const norm = String(name)
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/gi, 'd')
+    .toUpperCase();
+  return norm === 'THIEN';
 }
 
 function showToast(msg) {
@@ -2067,6 +2079,50 @@ class TacticalAudioEngine {
       bp.connect(ng);
       connectOut(ng, 1.85);
       nSrc.start(now, Math.random() * 1.0, 0.42);
+    } else if (type === 'minigun') {
+      // M134 Vulcan 6-Barrel 7.62mm Rotary Cannon: Thunderous high-RPM BRRRRRRT pulse
+      const osc = this.ctx.createOscillator();
+      const og = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(132 + (Math.random() - 0.5) * 18, now);
+      osc.frequency.exponentialRampToValueAtTime(44, now + 0.068);
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 460;
+      og.gain.setValueAtTime(0.56, now);
+      og.gain.exponentialRampToValueAtTime(0.001, now + 0.072);
+      osc.connect(lp);
+      lp.connect(og);
+      connectOut(og, 0.72);
+      osc.start(now);
+      osc.stop(now + 0.076);
+
+      // Electric rotary buzz harmonic
+      const buzz = this.ctx.createOscillator();
+      const bg = this.ctx.createGain();
+      buzz.type = 'square';
+      buzz.frequency.setValueAtTime(235 + Math.random() * 25, now);
+      bg.gain.setValueAtTime(0.11, now);
+      bg.gain.exponentialRampToValueAtTime(0.001, now + 0.052);
+      buzz.connect(bg);
+      connectOut(bg, 0.35);
+      buzz.start(now);
+      buzz.stop(now + 0.055);
+
+      // Sharp 7.62 NATO ballistic crack
+      const nSrc = this.ctx.createBufferSource();
+      nSrc.buffer = this.noiseBuf;
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2150 + (Math.random() - 0.5) * 260;
+      bp.Q.value = 0.82;
+      const ng = this.ctx.createGain();
+      ng.gain.setValueAtTime(0.58, now);
+      ng.gain.exponentialRampToValueAtTime(0.001, now + 0.088);
+      nSrc.connect(bp);
+      bp.connect(ng);
+      connectOut(ng, 0.95);
+      nSrc.start(now, Math.random() * 1.2, 0.095);
     } else {
       // STI-2011 .45 ACP Tactical Sidearm
       const osc = this.ctx.createOscillator();
@@ -3146,6 +3202,28 @@ const WEAPON_SPECS = [
     kickBack: 0.048,
     hipPos: new THREE.Vector3(0.11, -0.095, -0.26),
     adsPos: new THREE.Vector3(0.0, -0.112, -0.27)
+  },
+  {
+    id: 'minigun',
+    name: 'M134 VULCAN 6-NÒNG',
+    slotLabel: '6-NÒNG',
+    fireMode: 'GATLING ∞',
+    auto: true,
+    rpm: 1500,
+    magSize: 999,
+    infiniteAmmo: true,
+    reloadTime: 1.0,
+    boltCycleTime: 0,
+    dmgBody: 21,
+    dmgHead: 54,
+    hipSpread: 0.021,
+    adsSpread: 0.009,
+    adsFovMul: 0.85,
+    recoilPitch: 0.0052,
+    recoilYaw: 0.0082,
+    kickBack: 0.018,
+    hipPos: new THREE.Vector3(0.24, -0.24, -0.40),
+    adsPos: new THREE.Vector3(0.15, -0.20, -0.35)
   }
 ];
 
@@ -3526,6 +3604,115 @@ function createWeaponViewmodels(mats) {
     models.push({ root, boltGroup, magGroup, muzzlePoint, ejectPoint, laserOrigin: null, isBoltAction: false });
   }
 
+  // ==================== [3] M134 VULCAN 6-BARREL ROTARY MINIGUN (CREATOR SECRET) ====================
+  {
+    const root = new THREE.Group();
+
+    // Heavy Cylindrical Delrin/Steel Rotor Receiver Drum
+    const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.062, 0.25, 16), mats.gunmetal);
+    housing.rotation.x = Math.PI / 2;
+    housing.position.set(0, 0.010, -0.02);
+    root.add(housing);
+
+    for (let i = 0; i < 4; i++) {
+      const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.064, 0.064, 0.012, 16), mats.darkSteel);
+      rib.rotation.x = Math.PI / 2;
+      rib.position.set(0, 0.010, 0.06 - i * 0.052);
+      root.add(rib);
+    }
+
+    // Rear Breech Cap & Trigger Spade Grip Assembly
+    const rearCap = new THREE.Mesh(new RoundedBoxGeometry(0.088, 0.088, 0.065, 2, 0.008), mats.darkSteel);
+    rearCap.position.set(0, 0.008, 0.115);
+    root.add(rearCap);
+
+    const spadeGrip = new THREE.Mesh(new RoundedBoxGeometry(0.036, 0.115, 0.048, 2, 0.006), mats.polymerGrip);
+    spadeGrip.position.set(0.014, -0.045, 0.135);
+    spadeGrip.rotation.x = 0.25;
+    root.add(spadeGrip);
+
+    // Top-Mounted General Electric 28V DC Drive Motor + Copper Collar
+    const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.027, 0.165, 12), mats.darkSteel);
+    motor.rotation.x = Math.PI / 2;
+    motor.position.set(0.038, 0.066, -0.035);
+    const motorCap = new THREE.Mesh(new THREE.CylinderGeometry(0.029, 0.029, 0.024, 12), mats.titaniumBronze);
+    motorCap.rotation.x = Math.PI / 2;
+    motorCap.position.set(0.038, 0.066, 0.042);
+    root.add(motor, motorCap);
+
+    // Iconic Chainsaw Carry Handle Crossbar (Left Gloved Hand Overhead Grip!)
+    const strutL = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.105, 8), mats.gunmetal);
+    strutL.position.set(-0.052, 0.058, -0.115);
+    strutL.rotation.x = -0.18;
+    const strutR = strutL.clone();
+    strutR.position.x = 0.052;
+    const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.118, 10), mats.polymerGrip);
+    crossbar.rotation.z = Math.PI / 2;
+    crossbar.position.set(0, 0.106, -0.125);
+    root.add(strutL, strutR, crossbar);
+
+    // Left-Side Feeder/Delinker Box + Linked 7.62mm Brass Cartridge Belt
+    const feeder = new THREE.Mesh(new RoundedBoxGeometry(0.048, 0.058, 0.095, 2, 0.005), mats.fdeCerakote);
+    feeder.position.set(-0.064, 0.008, -0.025);
+    root.add(feeder);
+    for (let b = 0; b < 7; b++) {
+      const round = new THREE.Mesh(new THREE.CylinderGeometry(0.0046, 0.0056, 0.052, 8), mats.titaniumBronze);
+      round.rotation.x = Math.PI / 2;
+      round.position.set(-0.088 - b * 0.008, -0.004 - b * 0.017, -0.025 + b * 0.004);
+      round.rotation.z = 0.25 + b * 0.06;
+      root.add(round);
+    }
+
+    // Rotating 6-Barrel Cluster + 3 Perforated Clamp Discs + Dynamic Thermal Barrel Glow!
+    const rotaryGroup = new THREE.Group();
+    rotaryGroup.position.set(0, 0.010, 0);
+    const barrelGlowMat = mats.darkSteel.clone();
+    barrelGlowMat.emissive = new THREE.Color(0xff3d08);
+    barrelGlowMat.emissiveIntensity = 0.0;
+
+    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.62, 10), mats.gunmetal);
+    axle.rotation.x = Math.PI / 2;
+    axle.position.z = -0.44;
+    rotaryGroup.add(axle);
+
+    for (let k = 0; k < 6; k++) {
+      const ang = (k / 6) * Math.PI * 2;
+      const bx = Math.cos(ang) * 0.034;
+      const by = Math.sin(ang) * 0.034;
+      const brl = new THREE.Mesh(new THREE.CylinderGeometry(0.0082, 0.0085, 0.64, 10), barrelGlowMat);
+      brl.rotation.x = Math.PI / 2;
+      brl.position.set(bx, by, -0.45);
+      rotaryGroup.add(brl);
+    }
+
+    for (const cz of [-0.22, -0.45, -0.69]) {
+      const clampDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.018, 12), mats.gunmetal);
+      clampDisc.rotation.x = Math.PI / 2;
+      clampDisc.position.z = cz;
+      rotaryGroup.add(clampDisc);
+    }
+    root.add(rotaryGroup);
+
+    const boltGroup = new THREE.Group();
+    const magGroup = new THREE.Group();
+    root.add(boltGroup, magGroup);
+
+    const muzzlePoint = new THREE.Object3D();
+    muzzlePoint.position.set(0, 0.010, -0.78);
+    root.add(muzzlePoint);
+
+    const ejectPoint = new THREE.Object3D();
+    ejectPoint.position.set(0.068, -0.010, -0.02);
+    root.add(ejectPoint);
+
+    root.add(buildTacticalArms(mats, new THREE.Vector3(-0.016, 0.102, -0.125), new THREE.Vector3(0.014, -0.052, 0.135)));
+    models.push({
+      root, boltGroup, magGroup, muzzlePoint, ejectPoint,
+      laserOrigin: null, isBoltAction: false,
+      rotaryGroup, barrelGlowMat
+    });
+  }
+
   return models;
 }
 
@@ -3752,6 +3939,24 @@ class ViewmodelRig {
       w.boltGroup.position.z = (w.isBoltAction ? 0.02 : 0.0) + this.boltRecoil * 0.048;
     }
 
+    // M134 Vulcan 6-Barrel High-RPM Spin, Mechanical Vibration & Thermal Glow!
+    if (w.rotaryGroup) {
+      const wantSpin = state.firing || state.ads;
+      this.minigunSpin = damp(this.minigunSpin || 0, wantSpin ? 54.0 : 0.0, wantSpin ? 14.0 : 3.0, dt);
+      w.rotaryGroup.rotation.z = ((w.rotaryGroup.rotation.z || 0) + this.minigunSpin * dt) % (Math.PI * 2);
+      this.minigunHeat = state.firing
+        ? Math.min(1.0, (this.minigunHeat || 0) + dt * 0.42)
+        : Math.max(0.0, (this.minigunHeat || 0) - dt * 0.28);
+      if (w.barrelGlowMat) {
+        w.barrelGlowMat.emissiveIntensity = this.minigunHeat * this.minigunHeat * 3.4;
+      }
+      if (this.minigunSpin > 4.0) {
+        const vib = (this.minigunSpin / 54.0) * (state.firing ? 0.0032 : 0.0009);
+        targetPos.x += (Math.random() - 0.5) * vib;
+        targetPos.y += (Math.random() - 0.5) * vib;
+      }
+    }
+
     if (this.drawTimer > 0) this.drawTimer = Math.max(0, this.drawTimer - dt);
 
     this.posSpring.target.copy(targetPos);
@@ -3787,7 +3992,8 @@ function createWeaponArsenalWithMuzzleFlash(mats, parentPivot) {
     depthWrite: false
   });
 
-  for (const w of list) {
+  for (let idx = 0; idx < list.length; idx++) {
+    const w = list[idx];
     const flashGrp = new THREE.Group();
     for (let i = 0; i < 3; i++) {
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.045), flashMat);
@@ -3797,6 +4003,7 @@ function createWeaponArsenalWithMuzzleFlash(mats, parentPivot) {
     }
     const core = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 8), flashMat);
     flashGrp.add(core);
+    if (idx === 3) flashGrp.scale.setScalar(1.75);
     flashGrp.position.copy(w.muzzlePoint.position);
     flashGrp.visible = false;
     w.root.add(flashGrp);
@@ -3814,15 +4021,17 @@ function makeNameplateSprite(name) {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 64;
   const g = c.getContext('2d');
-  g.fillStyle = 'rgba(8, 12, 18, 0.72)';
+  const boss = isThienName(name);
+  g.fillStyle = boss ? 'rgba(24, 16, 6, 0.84)' : 'rgba(8, 12, 18, 0.72)';
   g.fillRect(18, 14, 220, 36);
-  g.strokeStyle = 'rgba(255, 75, 85, 0.75)';
-  g.lineWidth = 2;
+  g.strokeStyle = boss ? 'rgba(255, 190, 64, 0.95)' : 'rgba(255, 75, 85, 0.75)';
+  g.lineWidth = boss ? 2.6 : 2;
   g.strokeRect(18, 14, 220, 36);
-  g.fillStyle = '#ffffff';
+  g.fillStyle = boss ? '#ffd269' : '#ffffff';
   g.font = '700 22px "Rajdhani", sans-serif';
   g.textAlign = 'center';
-  g.fillText(name.slice(0, 14).toUpperCase(), 128, 39);
+  const label = boss ? `★ ${name.slice(0, 10).toUpperCase()} ★` : name.slice(0, 14).toUpperCase();
+  g.fillText(label, 128, 39);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
@@ -3965,9 +4174,32 @@ class RemoteOperator {
     const wpnBody = new THREE.Mesh(new RoundedBoxGeometry(0.06, 0.11, 0.68, 2, 0.01), mats.gunmetal);
     wpnBody.position.set(0.11, -0.03, -0.36);
     wpnBody.castShadow = true;
+    this.rifleMesh = wpnBody;
+
+    // Third-person 6-Barrel M134 Rotary Minigun (visible on THIEN to other players!)
+    this.minigunGroup = new THREE.Group();
+    this.minigunGroup.position.set(0.11, -0.06, -0.22);
+    const mgDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.28, 12), mats.gunmetal);
+    mgDrum.rotation.x = Math.PI / 2;
+    this.tpRotary = new THREE.Group();
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      const brl = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.68, 8), mats.darkSteel);
+      brl.rotation.x = Math.PI / 2;
+      brl.position.set(Math.cos(a) * 0.048, Math.sin(a) * 0.048, -0.44);
+      this.tpRotary.add(brl);
+    }
+    const mgClamp = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.025, 10), mats.fdeCerakote);
+    mgClamp.rotation.x = Math.PI / 2;
+    mgClamp.position.z = -0.68;
+    this.tpRotary.add(mgClamp);
+    this.minigunGroup.add(mgDrum, this.tpRotary);
+    this.minigunGroup.visible = false;
+    this.firingSpinTimer = 0;
+
     this.muzzleNode = new THREE.Object3D();
     this.muzzleNode.position.set(0.11, -0.01, -0.74);
-    this.gunRig.add(armR, armL, wpnBody, this.muzzleNode);
+    this.gunRig.add(armR, armL, wpnBody, this.minigunGroup, this.muzzleNode);
     this.upperPivot.add(this.gunRig);
 
     this.nameplate = makeNameplateSprite(this.name);
@@ -4042,9 +4274,22 @@ class RemoteOperator {
     this.gunRig.rotation.x = clamp(this.pitch, -1.1, 1.1);
     this.headGroup.rotation.x = clamp(this.pitch * 0.65, -0.7, 0.7);
 
-    // Stride limb animation + Spatialized 3D Enemy Footsteps
+    // Toggle Third-Person 6-Barrel M134 Rotary Minigun vs Standard Rifle
+    const isMini = this.weaponIdx === 3;
+    if (this.rifleMesh) this.rifleMesh.visible = !isMini;
+    if (this.minigunGroup) this.minigunGroup.visible = isMini;
+    this.firingSpinTimer = Math.max(0, (this.firingSpinTimer || 0) - dt);
+    if (isMini && this.tpRotary) {
+      this.tpRotary.rotation.z = (this.tpRotary.rotation.z + dt * (this.firingSpinTimer > 0 ? 54.0 : 9.5)) % (Math.PI * 2);
+    }
+
+    // Airborne Creative Hover Pose vs Stride Limb Animation + Spatialized 3D Enemy Footsteps
     const hSpeed = Math.hypot(this.netVel.x, this.netVel.z);
-    if (hSpeed > 0.45 && !this.sliding) {
+    const isAirborne = this.pos.y > 0.38 && !(this.pos.x < -16.2 && Math.abs(this.pos.y - 2.6) < 0.42);
+    if (isAirborne) {
+      this.legL.rotation.x = damp(this.legL.rotation.x, 0.26, 10, dt);
+      this.legR.rotation.x = damp(this.legR.rotation.x, -0.14, 10, dt);
+    } else if (hSpeed > 0.45 && !this.sliding) {
       this.walkCycle += dt * hSpeed * 2.1;
       const swing = Math.sin(this.walkCycle) * 0.62 * clamp(hSpeed / 6.0, 0.3, 1.15);
       this.legL.rotation.x = swing;
@@ -4749,6 +4994,11 @@ class IronveilEngine {
     try { savedCallsign = localStorage.getItem('ironveil_callsign') || ''; } catch (_) {}
     this.myName = savedCallsign || 'VANGUARD';
     document.getElementById('callsign-input').value = this.myName;
+    this.creatorMode = isThienName(this.myName);
+    this.isFlying = false;
+    this._lastSpaceTap = 0;
+    const initSlot4 = document.getElementById('slot-4');
+    if (initSlot4) initSlot4.style.display = this.creatorMode ? 'inline-block' : 'none';
 
     this.inMatch = false;
     this.paused = false;
@@ -5361,6 +5611,7 @@ class IronveilEngine {
       op.sliding = (d[8] & 2) !== 0;
       op.weaponIdx = d[9];
     } else if (msg.t === 'fire') {
+      op.firingSpinTimer = 0.16;
       this.spawnRemoteShotFX(msg.o, msg.e, msg.w, msg.mat);
       this.broadcastFromHost({ t: 'fx_fire', id: pid, o: msg.o, e: msg.e, w: msg.w, mat: msg.mat }, pid);
     } else if (msg.t === 'nade') {
@@ -5423,6 +5674,8 @@ class IronveilEngine {
         op.applySnapshot(p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[12], p[10], p[11] === 1);
       }
     } else if (msg.t === 'fx_fire') {
+      const shooter = this.remotes.get(msg.id);
+      if (shooter) shooter.firingSpinTimer = 0.16;
       this.spawnRemoteShotFX(msg.o, msg.e, msg.w, msg.mat);
     } else if (msg.t === 'fx_nade') {
       this.vfx.spawnGrenade(new THREE.Vector3(...msg.o), new THREE.Vector3(...msg.v), 'remote', null);
@@ -5668,6 +5921,10 @@ class IronveilEngine {
   /* ================= LOCAL COMBAT, SHOOTING & HUD FEEDBACK ================= */
 
   spawnLocalAt(sp) {
+    this.creatorMode = isThienName(this.myName);
+    const slot4 = document.getElementById('slot-4');
+    if (slot4) slot4.style.display = this.creatorMode ? 'inline-block' : 'none';
+
     this.pos.set(sp.x, sp.y, sp.z);
     this.vel.set(0, 0, 0);
     this.yaw = sp.yaw ?? 0;
@@ -5677,6 +5934,19 @@ class IronveilEngine {
     this.reloading = false;
     this.boltTimer = 0;
     this.mags = WEAPON_SPECS.map(s => s.magSize);
+
+    if (this.creatorMode) {
+      this.isFlying = true;
+      this.pos.y = Math.max(this.pos.y, 1.35);
+      this.wpnIdx = 3;
+      if (this.viewmodel) this.viewmodel.equip(3, true);
+    } else {
+      this.isFlying = false;
+      if (this.wpnIdx === 3) {
+        this.wpnIdx = 0;
+        if (this.viewmodel) this.viewmodel.equip(0, true);
+      }
+    }
     document.getElementById('death-overlay').classList.remove('active');
   }
 
@@ -5750,12 +6020,15 @@ class IronveilEngine {
 
   fireWeapon() {
     const spec = WEAPON_SPECS[this.wpnIdx];
-    if (this.mags[this.wpnIdx] <= 0) {
+    const infAmmo = this.creatorMode || !!spec.infiniteAmmo;
+    if (!infAmmo && this.mags[this.wpnIdx] <= 0) {
       this.startReload();
       return;
     }
 
-    this.mags[this.wpnIdx]--;
+    if (!infAmmo) {
+      this.mags[this.wpnIdx]--;
+    }
     this.fireTimer = 60.0 / spec.rpm;
     if (spec.boltCycleTime > 0) {
       this.boltTimer = spec.boltCycleTime;
@@ -5784,7 +6057,7 @@ class IronveilEngine {
     this.vfx.spawnShellCasing(shellOrigin, camRight, camUp);
 
     // Compute Ballistic Ray Direction with ADS / Movement Spread
-    const moveFactor = clamp(Math.hypot(this.vel.x, this.vel.z) / 5.5, 0, 1.4) + (this.grounded ? 0 : 1.2);
+    const moveFactor = clamp(Math.hypot(this.vel.x, this.vel.z) / 5.5, 0, 1.4) + ((this.grounded || this.isFlying) ? 0 : 1.2);
     const baseSpread = lerp(spec.hipSpread * (1 + moveFactor * 0.65), spec.adsSpread, this.viewmodel.adsAlpha);
     const totalSpread = baseSpread + this.dynamicSpread;
     this.dynamicSpread = Math.min(0.045, this.dynamicSpread + spec.recoilPitch * 0.35);
@@ -5817,11 +6090,12 @@ class IronveilEngine {
       .addScaledVector(camRight, lerp(0.16, 0.01, this.viewmodel.adsAlpha))
       .addScaledVector(camUp, -0.09)
       .addScaledVector(camFwd, 0.55);
+    const heavyTracer = spec.id === 'ax50' || spec.id === 'minigun';
 
     if (hitOp && hitResult) {
       endPoint = hitResult.point;
       hitMat = 'flesh';
-      this.vfx.spawnTracer(tracerStart, endPoint, spec.id === 'ax50');
+      this.vfx.spawnTracer(tracerStart, endPoint, heavyTracer);
       this.vfx.spawnImpact(endPoint, rayDir.clone().negate(), 'flesh');
       hitOp.triggerHitFlash();
 
@@ -5843,7 +6117,7 @@ class IronveilEngine {
         });
       }
     } else {
-      this.vfx.spawnTracer(tracerStart, endPoint, spec.id === 'ax50');
+      this.vfx.spawnTracer(tracerStart, endPoint, heavyTracer);
       if (worldHit) {
         this.vfx.spawnImpact(worldHit.point, worldHit.normal, worldHit.matType);
       }
@@ -5864,7 +6138,7 @@ class IronveilEngine {
     const end = new THREE.Vector3(eArr[0], eArr[1], eArr[2]);
     const spec = WEAPON_SPECS[wIdx] || WEAPON_SPECS[0];
     this.audio.playGunshot(spec.id, start);
-    this.vfx.spawnTracer(start, end, spec.id === 'ax50');
+    this.vfx.spawnTracer(start, end, spec.id === 'ax50' || spec.id === 'minigun');
 
     if (matType && matType !== 'none' && matType !== 'flesh') {
       const normal = new THREE.Vector3().subVectors(start, end).normalize();
@@ -5888,7 +6162,7 @@ class IronveilEngine {
 
   throwFragGrenade() {
     if (!this.alive || this.grenadeCooldown > 0 || this.roundFreezeTimer > 0) return;
-    this.grenadeCooldown = 8.0;
+    this.grenadeCooldown = this.creatorMode ? 0.55 : 8.0;
     this.audio.playFoley('boltSlap');
 
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.worldCamera.quaternion);
@@ -5909,6 +6183,7 @@ class IronveilEngine {
 
   startReload() {
     const spec = WEAPON_SPECS[this.wpnIdx];
+    if (this.creatorMode || spec.infiniteAmmo) return;
     if (this.reloading || this.mags[this.wpnIdx] >= spec.magSize) return;
     this.reloading = true;
     this.reloadTimer = spec.reloadTime;
@@ -6009,13 +6284,21 @@ class IronveilEngine {
         this.startNewDuelRound(true);
       } else {
         this.spawnLocalAt(this.arena.spawnPoints[0]);
-        this.showCenterBanner('OPERATION KRONOS-04', 'WEAPONS FREE // ELIMINATE ALL HOSTILES');
+        if (this.creatorMode) {
+          this.showCenterBanner('CREATIVE MODE // M134 VULCAN', 'SPACE: BAY LÊN • C/CTRL: HẠ XUỐNG • SHIFT: TĂNG TỐC • V: BẬT/TẮT BAY');
+        } else {
+          this.showCenterBanner('OPERATION KRONOS-04', 'WEAPONS FREE // ELIMINATE ALL HOSTILES');
+        }
       }
     } else if (fromNetwork) {
-      this.showCenterBanner(
-        this.gameMode === 'duel' ? 'ROUND 1' : 'OPERATION KRONOS-04',
-        'HOST DEPLOYED SQUAD // CLICK TO LOCK AIM'
-      );
+      if (this.creatorMode) {
+        this.showCenterBanner('CREATIVE MODE // M134 VULCAN', 'SPACE: BAY LÊN • C/CTRL: HẠ XUỐNG • V: BẬT/TẮT BAY');
+      } else {
+        this.showCenterBanner(
+          this.gameMode === 'duel' ? 'ROUND 1' : 'OPERATION KRONOS-04',
+          'HOST DEPLOYED SQUAD // CLICK TO LOCK AIM'
+        );
+      }
     }
 
     if (!fromNetwork) {
@@ -6056,9 +6339,37 @@ class IronveilEngine {
   }
 
   saveCallsign() {
-    const raw = document.getElementById('callsign-input').value.trim().toUpperCase();
+    const raw = document.getElementById('callsign-input').value
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/gi, 'd')
+      .toUpperCase();
     this.myName = (raw || 'VANGUARD').slice(0, 14);
     try { localStorage.setItem('ironveil_callsign', this.myName); } catch (_) {}
+
+    const wasCreator = !!this.creatorMode;
+    this.creatorMode = isThienName(this.myName);
+    const slot4 = document.getElementById('slot-4');
+    if (slot4) slot4.style.display = this.creatorMode ? 'inline-block' : 'none';
+
+    if (!wasCreator && this.creatorMode && !this.inMatch) {
+      showToast('★ CHẾ ĐỘ SÁNG TẠO [THIEN] ĐÃ BẬT: BAY TỰ DO + 6-NÒNG VÔ HẠN ĐẠN! ★');
+    }
+    if (wasCreator !== this.creatorMode) {
+      if (this.creatorMode) {
+        this.isFlying = true;
+        this.pos.y = Math.max(this.pos.y, 1.35);
+        this.wpnIdx = 3;
+        if (this.viewmodel) this.viewmodel.equip(3, true);
+      } else {
+        this.isFlying = false;
+        if (this.wpnIdx === 3) {
+          this.wpnIdx = 0;
+          if (this.viewmodel) this.viewmodel.equip(0, true);
+        }
+      }
+    }
   }
 
   requestLockSafe() {
@@ -6129,100 +6440,127 @@ class IronveilEngine {
     const wishLen = Math.hypot(wishX, wishZ);
     if (wishLen > 1e-4) { wishX /= wishLen; wishZ /= wishLen; }
 
-    // Crouch & Tactical Slide Mechanics
-    const wantCrouch = canMove && (this.keys['KeyC'] || this.keys['ControlLeft']);
-    if (this.sliding) {
-      this.slideTimer -= dt;
-      if (this.slideTimer <= 0 || !wantCrouch) {
-        this.sliding = false;
-      }
-    } else if (wantCrouch && !this.crouching && this.sprinting && this.grounded && this.stamina > 0.25) {
-      // Trigger High-Momentum Tactical Slide!
-      this.sliding = true;
-      this.slideTimer = 0.58;
-      this.stamina = Math.max(0, this.stamina - 0.28);
-      this.slideDir.set(wishLen > 0.1 ? wishX : fwdX, 0, wishLen > 0.1 ? wishZ : fwdZ).normalize();
-      this.audio.playFoley('slide');
-    }
+    let horizSpeed = 0;
 
-    if (wantCrouch || this.sliding) {
-      this.crouching = true;
-    } else if (this.crouching && canStandUpAt(this.pos, 0.34, 1.74, this.arena)) {
+    if (this.creatorMode && this.isFlying) {
+      // Minecraft Creative Mode 3D Free-Flight (Zero Gravity Hover + Vertical Ascend/Descend + Turbo Boost)
+      this.stamina = 1.0;
       this.crouching = false;
-    }
-
-    // Tactical Sprint & Stamina
-    const wantSprint = canMove && this.keys['ShiftLeft'] && fwdIn > 0.2 && !this.crouching && !this.mouseDownR;
-    if (wantSprint && this.stamina > 0.05) {
-      this.sprinting = true;
-      this.stamina = Math.max(0, this.stamina - dt * 0.20);
-    } else {
+      this.sliding = false;
       this.sprinting = false;
-      this.stamina = Math.min(1.0, this.stamina + dt * 0.28);
-    }
-
-    // Sniper Hold-Breath Stabilization
-    const isAx50Scoped = this.wpnIdx === 1 && this.viewmodel.adsAlpha > 0.85;
-    if (isAx50Scoped && this.keys['ShiftLeft'] && this.breathStamina > 0.05) {
-      this.holdingBreath = true;
-      this.breathStamina = Math.max(0, this.breathStamina - dt * 0.32);
-    } else {
       this.holdingBreath = false;
-      this.breathStamina = Math.min(1.0, this.breathStamina + dt * 0.25);
-    }
-    if (isAx50Scoped && !this.holdingBreath) {
-      const t = performance.now() * 0.0018;
-      this.yaw += Math.sin(t * 1.3) * 0.00028;
-      this.pitch += Math.cos(t * 1.7) * 0.00028;
-    }
 
-    // Compute Horizontal Velocity
-    if (this.sliding) {
-      const slideSpd = lerp(3.8, 9.8, this.slideTimer / 0.58);
-      this.vel.x = this.slideDir.x * slideSpd;
-      this.vel.z = this.slideDir.z * slideSpd;
+      const flyBoost = canMove && (this.keys['ShiftLeft'] || this.keys['ShiftRight']) ? 1.85 : 1.0;
+      const ascend = canMove && this.keys['Space'] ? 1 : 0;
+      const descend = canMove && (this.keys['KeyC'] || this.keys['ControlLeft'] || this.keys['ControlRight']) ? 1 : 0;
+      const vertIn = ascend - descend;
+
+      const flyHorizSpd = 9.6 * flyBoost;
+      const flyVertSpd = 8.2 * flyBoost;
+      this.vel.x = damp(this.vel.x, wishX * flyHorizSpd, 11.5, dt);
+      this.vel.z = damp(this.vel.z, wishZ * flyHorizSpd, 11.5, dt);
+      this.vel.y = damp(this.vel.y, vertIn * flyVertSpd, 12.5, dt);
+
+      resolveCharacterPhysics(this.pos, this.vel, 0.34, 1.72, dt, this.arena, true);
+      this.pos.y = clamp(this.pos.y, 0.0, 22.0);
+      this.grounded = this.pos.y <= 0.02;
+      horizSpeed = Math.hypot(this.vel.x, this.vel.z);
     } else {
-      const targetSpd = this.crouching ? 3.15 : this.sprinting ? 7.65 : (this.mouseDownR ? 3.85 : 5.45);
-      const accel = this.grounded ? 15.0 : 4.2;
-      this.vel.x = damp(this.vel.x, wishX * targetSpd, accel, dt);
-      this.vel.z = damp(this.vel.z, wishZ * targetSpd, accel, dt);
-    }
+      // Crouch & Tactical Slide Mechanics
+      const wantCrouch = canMove && (this.keys['KeyC'] || this.keys['ControlLeft']);
+      if (this.sliding) {
+        this.slideTimer -= dt;
+        if (this.slideTimer <= 0 || !wantCrouch) {
+          this.sliding = false;
+        }
+      } else if (wantCrouch && !this.crouching && this.sprinting && this.grounded && this.stamina > 0.25) {
+        // Trigger High-Momentum Tactical Slide!
+        this.sliding = true;
+        this.slideTimer = 0.58;
+        this.stamina = Math.max(0, this.stamina - 0.28);
+        this.slideDir.set(wishLen > 0.1 ? wishX : fwdX, 0, wishLen > 0.1 ? wishZ : fwdZ).normalize();
+        this.audio.playFoley('slide');
+      }
 
-    // Jump & Gravity with Coyote Time
-    if (this.grounded) this.coyoteTimer = 0.085;
-    else this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+      if (wantCrouch || this.sliding) {
+        this.crouching = true;
+      } else if (this.crouching && canStandUpAt(this.pos, 0.34, 1.74, this.arena)) {
+        this.crouching = false;
+      }
 
-    if (canMove && this.keys['Space'] && this.coyoteTimer > 0 && !this.sliding) {
-      this.vel.y = 6.65;
-      this.grounded = false;
-      this.coyoteTimer = 0;
-      this.crouching = false;
-      const surf = this.arena.getSurfaceAt(this.pos.x, this.pos.y, this.pos.z);
-      this.audio.playFootstep(surf, null, true);
-    }
+      // Tactical Sprint & Stamina
+      const wantSprint = canMove && this.keys['ShiftLeft'] && fwdIn > 0.2 && !this.crouching && !this.mouseDownR;
+      if (wantSprint && (this.creatorMode || this.stamina > 0.05)) {
+        this.sprinting = true;
+        if (!this.creatorMode) this.stamina = Math.max(0, this.stamina - dt * 0.20);
+      } else {
+        this.sprinting = false;
+        this.stamina = Math.min(1.0, this.stamina + dt * 0.28);
+      }
 
-    this.vel.y -= 19.5 * dt;
+      // Sniper Hold-Breath Stabilization
+      const isAx50Scoped = this.wpnIdx === 1 && this.viewmodel.adsAlpha > 0.85;
+      if (isAx50Scoped && this.keys['ShiftLeft'] && this.breathStamina > 0.05) {
+        this.holdingBreath = true;
+        this.breathStamina = Math.max(0, this.breathStamina - dt * 0.32);
+      } else {
+        this.holdingBreath = false;
+        this.breathStamina = Math.min(1.0, this.breathStamina + dt * 0.25);
+      }
+      if (isAx50Scoped && !this.holdingBreath) {
+        const t = performance.now() * 0.0018;
+        this.yaw += Math.sin(t * 1.3) * 0.00028;
+        this.pitch += Math.cos(t * 1.7) * 0.00028;
+      }
 
-    const charHeight = this.crouching ? 1.22 : 1.74;
-    const wasAir = !this.grounded && this.vel.y < -4.0;
-    this.grounded = resolveCharacterPhysics(this.pos, this.vel, 0.34, charHeight, dt, this.arena, true);
+      // Compute Horizontal Velocity
+      if (this.sliding) {
+        const slideSpd = lerp(3.8, 9.8, this.slideTimer / 0.58);
+        this.vel.x = this.slideDir.x * slideSpd;
+        this.vel.z = this.slideDir.z * slideSpd;
+      } else {
+        const targetSpd = this.crouching ? 3.15 : this.sprinting ? 7.65 : (this.mouseDownR ? 3.85 : 5.45);
+        const accel = this.grounded ? 15.0 : 4.2;
+        this.vel.x = damp(this.vel.x, wishX * targetSpd, accel, dt);
+        this.vel.z = damp(this.vel.z, wishZ * targetSpd, accel, dt);
+      }
 
-    if (this.grounded && wasAir) {
-      this.camRecoil.impulse(-0.35, 0, 0);
-      this.viewmodel.posSpring.impulse(0, -0.35, 0);
-      const surf = this.arena.getSurfaceAt(this.pos.x, this.pos.y, this.pos.z);
-      this.audio.playFootstep(surf, null, true);
-    }
+      // Jump & Gravity with Coyote Time
+      if (this.grounded) this.coyoteTimer = 0.085;
+      else this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
 
-    // Material-Aware First-Person Footsteps
-    const horizSpeed = Math.hypot(this.vel.x, this.vel.z);
-    if (this.grounded && !this.sliding && horizSpeed > 0.6) {
-      this.stepDist += horizSpeed * dt;
-      const stride = this.sprinting ? 2.25 : 1.95;
-      if (this.stepDist >= stride) {
-        this.stepDist = 0;
+      if (canMove && this.keys['Space'] && this.coyoteTimer > 0 && !this.sliding) {
+        this.vel.y = 6.65;
+        this.grounded = false;
+        this.coyoteTimer = 0;
+        this.crouching = false;
         const surf = this.arena.getSurfaceAt(this.pos.x, this.pos.y, this.pos.z);
-        this.audio.playFootstep(surf, null, this.sprinting);
+        this.audio.playFootstep(surf, null, true);
+      }
+
+      this.vel.y -= 19.5 * dt;
+
+      const charHeight = this.crouching ? 1.22 : 1.74;
+      const wasAir = !this.grounded && this.vel.y < -4.0;
+      this.grounded = resolveCharacterPhysics(this.pos, this.vel, 0.34, charHeight, dt, this.arena, true);
+
+      if (this.grounded && wasAir) {
+        this.camRecoil.impulse(-0.35, 0, 0);
+        this.viewmodel.posSpring.impulse(0, -0.35, 0);
+        const surf = this.arena.getSurfaceAt(this.pos.x, this.pos.y, this.pos.z);
+        this.audio.playFootstep(surf, null, true);
+      }
+
+      // Material-Aware First-Person Footsteps
+      horizSpeed = Math.hypot(this.vel.x, this.vel.z);
+      if (this.grounded && !this.sliding && horizSpeed > 0.6) {
+        this.stepDist += horizSpeed * dt;
+        const stride = this.sprinting ? 2.25 : 1.95;
+        if (this.stepDist >= stride) {
+          this.stepDist = 0;
+          const surf = this.arena.getSurfaceAt(this.pos.x, this.pos.y, this.pos.z);
+          this.audio.playFootstep(surf, null, this.sprinting);
+        }
       }
     }
 
@@ -6386,18 +6724,21 @@ class IronveilEngine {
     document.getElementById('hud-bio').classList.toggle('critical', hpInt < 35 && this.alive);
 
     document.getElementById('hud-stam-bar').style.width = `${Math.round(this.stamina * 100)}%`;
-    document.getElementById('hud-stance').textContent =
-      this.sliding ? 'SLIDING' : this.crouching ? 'CROUCHED' : this.sprinting ? 'TAC-SPRINT' : 'STANDING';
+    document.getElementById('hud-stance').textContent = (this.creatorMode && this.isFlying)
+      ? `CREATIVE FLY (${this.pos.y.toFixed(1)}M)`
+      : (this.sliding ? 'SLIDING' : this.crouching ? 'CROUCHED' : this.sprinting ? 'TAC-SPRINT' : 'STANDING');
 
     const spec = WEAPON_SPECS[this.wpnIdx];
+    const infAmmo = this.creatorMode || !!spec.infiniteAmmo;
     const magEl = document.getElementById('hud-ammo-mag');
-    magEl.textContent = this.reloading ? 'RLD' : this.mags[this.wpnIdx];
-    magEl.classList.toggle('low', this.mags[this.wpnIdx] <= Math.ceil(spec.magSize * 0.25));
+    magEl.textContent = infAmmo ? '∞' : (this.reloading ? 'RLD' : this.mags[this.wpnIdx]);
+    magEl.classList.toggle('low', !infAmmo && this.mags[this.wpnIdx] <= Math.ceil(spec.magSize * 0.25));
     document.getElementById('hud-wpn-name').textContent = spec.name;
     document.getElementById('hud-firemode').textContent = spec.fireMode;
 
-    for (let i = 0; i < 3; i++) {
-      document.getElementById(`slot-${i + 1}`).classList.toggle('active', this.wpnIdx === i);
+    for (let i = 0; i < 4; i++) {
+      const slotEl = document.getElementById(`slot-${i + 1}`);
+      if (slotEl) slotEl.classList.toggle('active', this.wpnIdx === i);
     }
     const gSlot = document.getElementById('slot-g');
     gSlot.textContent = this.grenadeCooldown > 0 ? `[G] ${Math.ceil(this.grenadeCooldown)}S` : '[G] FRAG';
@@ -6405,8 +6746,10 @@ class IronveilEngine {
 
     // Dynamic Crosshair Spread & ADS Fade
     const ch = document.getElementById('crosshair');
-    ch.style.opacity = String(clamp(1.0 - this.viewmodel.adsAlpha * 1.4, 0, 1));
-    const gap = Math.round(6 + (Math.hypot(this.vel.x, this.vel.z) * 1.5) + this.dynamicSpread * 260 + (this.grounded ? 0 : 10));
+    ch.style.opacity = spec.id === 'minigun'
+      ? '1'
+      : String(clamp(1.0 - this.viewmodel.adsAlpha * 1.4, 0, 1));
+    const gap = Math.round(6 + (Math.hypot(this.vel.x, this.vel.z) * 1.5) + this.dynamicSpread * 260 + ((this.grounded || this.isFlying) ? 0 : 10));
     document.getElementById('ch-t').style.bottom = `${gap}px`;
     document.getElementById('ch-b').style.top = `${gap}px`;
     document.getElementById('ch-l').style.right = `${gap}px`;
@@ -6762,7 +7105,8 @@ class IronveilEngine {
 
     window.addEventListener('wheel', (e) => {
       if (!this.inMatch || this.paused || !this.alive) return;
-      const next = (this.wpnIdx + (e.deltaY > 0 ? 1 : 2)) % 3;
+      const maxSlots = this.creatorMode ? 4 : 3;
+      const next = (this.wpnIdx + (e.deltaY > 0 ? 1 : maxSlots - 1)) % maxSlots;
       this.switchWeapon(next);
     });
 
@@ -6774,6 +7118,7 @@ class IronveilEngine {
         return;
       }
 
+      const firstPress = !this.keys[e.code];
       this.keys[e.code] = true;
       if (e.code === 'Escape' && this.inMatch && !this.matchEnded && document.pointerLockElement !== this.canvas) {
         this.paused = !this.paused;
@@ -6786,9 +7131,33 @@ class IronveilEngine {
       }
       if (!this.inMatch || this.paused || !this.alive) return;
 
+      // Minecraft Creative Flight Toggle ([V] or Double-Tap [SPACE]) for THIEN
+      if (this.creatorMode && firstPress && !e.repeat) {
+        if (e.code === 'KeyV') {
+          this.isFlying = !this.isFlying;
+          this.vel.y = 0;
+          this.audio.playFoley('ads');
+          showToast(this.isFlying ? 'CREATIVE FLIGHT: ON (SPACE LÊN • C/CTRL XUỐNG)' : 'CREATIVE FLIGHT: OFF (ĐI BỘ)');
+          return;
+        }
+        if (e.code === 'Space') {
+          const nowMs = performance.now();
+          if (nowMs - this._lastSpaceTap < 290) {
+            this.isFlying = !this.isFlying;
+            this.vel.y = 0;
+            this._lastSpaceTap = 0;
+            this.audio.playFoley('ads');
+            showToast(this.isFlying ? 'CREATIVE FLIGHT: ON' : 'CREATIVE FLIGHT: OFF');
+          } else {
+            this._lastSpaceTap = nowMs;
+          }
+        }
+      }
+
       if (e.code === 'Digit1') this.switchWeapon(0);
       else if (e.code === 'Digit2') this.switchWeapon(1);
       else if (e.code === 'Digit3') this.switchWeapon(2);
+      else if (e.code === 'Digit4' && this.creatorMode) this.switchWeapon(3);
       else if (e.code === 'KeyR') this.startReload();
       else if (e.code === 'KeyF') this.viewmodel.triggerInspect();
       else if (e.code === 'KeyG') this.throwFragGrenade();
@@ -6808,7 +7177,8 @@ class IronveilEngine {
   }
 
   switchWeapon(idx) {
-    if (idx === this.wpnIdx || idx < 0 || idx > 2) return;
+    const maxIdx = this.creatorMode ? 3 : 2;
+    if (idx === this.wpnIdx || idx < 0 || idx > maxIdx) return;
     this.reloading = false;
     this.boltTimer = 0;
     this.wpnIdx = idx;
